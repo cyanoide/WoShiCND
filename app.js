@@ -885,16 +885,11 @@ function getOrbitSatellites(centerKey) {
     }
   }
 
-  if (v && v.rad) {
-    for (const entry of VOCAB) {
-      if (results.length >= 8) break;
-      if (entry.hanzi === centerKey || seen.has(entry.hanzi)) continue;
-      if (entry.rad === v.rad) {
-        results.push({ relation: 'sibling', char: entry.hanzi, pinyin: entry.pinyin, meaning: entry.gloss, node: buildOrbitNode(entry.hanzi) });
-        seen.add(entry.hanzi);
-      }
-    }
-  }
+  // Pas de lien "même radical" : deux mots qui partagent juste 鸟 (ex. 鸭 et 鸡)
+  // n'ont pas de vrai rapport de composition entre eux — ça encombrait le
+  // graphe de liens artificiels. Un mot ne relie que ce qui le compose
+  // vraiment, et ce qu'il compose ailleurs. Pour "tous les mots avec 鸟",
+  // la page Radicaux reste l'outil dédié.
 
   return results;
 }
@@ -905,13 +900,15 @@ function renderExplorerPage() {
   const satellites = getOrbitSatellites(center.key);
   const em = center.emoji;
 
+  const ORBIT_DURATION = 50; // secondes pour un tour complet — lent et calme
+
   content.innerHTML = `
     ${pageHeader(t(UI.explorerTitle), t(UI.explorerSub))}
     <div class="orbit-toolbar">
       <button class="flash-btn" id="btnOrbitBack" ${state.explorer.history.length ? '' : 'disabled'}>${t(UI.explorerBack)}</button>
     </div>
     <div class="orbit-wrap" id="orbitWrap">
-      <svg class="orbit-svg" id="orbitSvg"></svg>
+      <div class="orbit-ring"></div>
       <div class="orbit-center">
         ${em ? `<div class="orbit-emoji">${em}</div>` : ''}
         <div class="orbit-hanzi">${center.hanzi}</div>
@@ -919,17 +916,22 @@ function renderExplorerPage() {
         <div class="orbit-label">${t(center.label)}</div>
         <button class="btn-audio" data-speak="${center.hanzi}">${t(UI.listen)}</button>
       </div>
-      ${satellites.map((s, i) => `
-        <div class="orbit-satellite ${s.node ? 'navigable' : 'leaf'} rel-${s.relation}" data-index="${i}" ${s.node ? `data-key="${s.node.key}"` : ''} title="${t(s.meaning) || t(UI.explorerDeadEnd)}">
-          ${s.node && s.node.emoji ? `<span class="orbit-sat-emoji">${s.node.emoji}</span>` : ''}
-          <span class="orbit-sat-char">${s.char}</span>
-          <span class="orbit-sat-pinyin">${s.pinyin}</span>
+      ${satellites.map((s, i) => {
+        const delay = -(i / satellites.length) * ORBIT_DURATION;
+        return `
+        <div class="orbit-track" style="animation-duration:${ORBIT_DURATION}s; animation-delay:${delay}s;">
+          <div class="orbit-satellite ${s.node ? 'navigable' : 'leaf'} rel-${s.relation}" style="animation-duration:${ORBIT_DURATION}s; animation-delay:${delay}s;" ${s.node ? `data-key="${s.node.key}"` : ''} title="${t(s.meaning) || t(UI.explorerDeadEnd)}">
+            <span class="orbit-sat-dot"></span>
+            <span class="orbit-sat-char">${s.char}</span>
+            <span class="orbit-sat-pinyin">${s.pinyin}</span>
+          </div>
         </div>
-      `).join('')}
+      `;
+      }).join('')}
     </div>
   `;
 
-  positionOrbit(satellites.length);
+  sizeOrbit();
 
   document.getElementById('btnOrbitBack').addEventListener('click', () => {
     const prev = state.explorer.history.pop();
@@ -947,26 +949,15 @@ function renderExplorerPage() {
   });
 }
 
-function positionOrbit(count) {
+// Le rayon d'orbite (en px) est fourni aux pistes via une variable CSS,
+// calculé à partir de la taille réelle du conteneur (responsive).
+function sizeOrbit() {
   const wrap = document.getElementById('orbitWrap');
-  const svg = document.getElementById('orbitSvg');
-  if (!wrap || count === 0) return;
-  const size = wrap.clientWidth;
-  const radius = size * 0.37;
-  const cx = size / 2, cy = size / 2;
-  svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
-
-  const satellites = wrap.querySelectorAll('.orbit-satellite');
-  let lines = '';
-  satellites.forEach((el, i) => {
-    const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
-    const x = cx + Math.cos(angle) * radius;
-    const y = cy + Math.sin(angle) * radius;
-    el.style.left = x + 'px';
-    el.style.top = y + 'px';
-    lines += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" class="orbit-line ${el.classList.contains('leaf') ? 'leaf' : ''}" />`;
+  if (!wrap) return;
+  const radius = wrap.clientWidth * 0.33;
+  wrap.querySelectorAll('.orbit-track').forEach(track => {
+    track.style.setProperty('--r', radius + 'px');
   });
-  svg.innerHTML = lines;
 }
 
 // ---------------- ROUTER ----------------

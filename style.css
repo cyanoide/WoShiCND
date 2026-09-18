@@ -533,7 +533,7 @@ body {
 .grammar-example-fr { font-size: 13px; color: var(--text); opacity: 0.8; margin-top: 2px; }
 .grammar-example-note { font-size: 11px; color: var(--muted); font-style: italic; margin-top: 4px; }
 
-/* --- Explorer (réseau de mots) --- */
+/* --- Explorer (réseau de mots, vue orbite) --- */
 .orbit-toolbar { display: flex; justify-content: center; margin-bottom: 18px; }
 .orbit-wrap {
   position: relative;
@@ -541,70 +541,124 @@ body {
   height: min(420px, 92vw);
   margin: 0 auto;
 }
-.orbit-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.orbit-line { stroke: var(--border); stroke-width: 1.5; }
-.orbit-line.leaf { stroke-dasharray: 3 4; opacity: 0.6; }
+
+/* anneau pointillé décoratif qui trace le chemin de l'orbite */
+.orbit-ring {
+  position: absolute;
+  inset: 17%;
+  border: 1px dashed var(--accent);
+  border-radius: 50%;
+  opacity: 0.2;
+  pointer-events: none;
+}
 
 .orbit-center {
   position: absolute;
   left: 50%; top: 50%;
   transform: translate(-50%, -50%);
-  width: 132px;
+  width: 156px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 14px 10px;
+  justify-content: center;
+  gap: 3px;
+  padding: 10px;
   border: 1px solid var(--accent);
-  border-radius: 2px;
   background: var(--item-selected);
-  box-shadow: 0 0 20px var(--accent-glow);
+  box-shadow: 0 0 24px var(--accent-glow);
   text-align: center;
   z-index: 2;
 }
-.orbit-emoji { font-size: 22px; }
-.orbit-hanzi { font-size: 30px; font-weight: 600; line-height: 1.1; }
-.orbit-pinyin { font-family: var(--font-pinyin); font-size: 13px; color: var(--accent); }
+.orbit-emoji { font-size: 20px; }
+.orbit-hanzi { font-size: 26px; font-weight: 600; line-height: 1.1; }
+.orbit-pinyin { font-family: var(--font-pinyin); font-size: 12px; color: var(--accent); }
 .orbit-label {
-  font-size: 11px; color: var(--text); opacity: 0.85;
+  font-size: 9px; color: var(--text); opacity: 0.85;
   text-transform: uppercase; letter-spacing: 0.5px;
-  max-width: 120px;
+  max-width: 110px;
+  line-height: 1.2;
+}
+.orbit-center .btn-audio { font-size: 9px; padding: 3px 6px; margin-top: 1px; }
+
+/* piste invisible qui tourne en continu ; le satellite est décalé du rayon
+   --r (fixé en JS selon la taille réelle du conteneur) et contre-tourne pour
+   rester lisible pendant que la piste l'emmène autour du centre. */
+.orbit-track {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  animation-name: orbit-spin;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes orbit-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes orbit-counter-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(-360deg); }
 }
 
 .orbit-satellite {
   position: absolute;
+  top: calc(var(--r, 140px) * -1);
+  left: 0;
   transform: translate(-50%, -50%);
+  animation-name: orbit-counter-spin;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 2px;
-  width: 78px;
-  padding: 8px 6px;
+  width: 74px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
   border: 1px solid var(--border);
-  border-radius: 2px;
   background: var(--bg-card);
   text-align: center;
   z-index: 1;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
-.orbit-satellite.navigable { cursor: pointer; }
-.orbit-satellite.navigable:hover, .orbit-satellite.navigable:active {
+.orbit-satellite.navigable {
+  cursor: pointer;
   border-color: var(--accent);
-  box-shadow: 0 0 12px var(--accent-glow);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
-.orbit-satellite.leaf { border-style: dashed; opacity: 0.7; cursor: help; }
-.orbit-sat-emoji { font-size: 15px; }
-.orbit-sat-char { font-size: 18px; font-weight: 600; line-height: 1; }
-.orbit-sat-pinyin { font-family: var(--font-pinyin); font-size: 10px; color: var(--muted); }
+.orbit-satellite.navigable:hover, .orbit-satellite.navigable:active {
+  box-shadow: 0 0 18px var(--accent-glow);
+  background: var(--item-selected);
+}
+.orbit-satellite.leaf { border-style: dashed; opacity: 0.55; cursor: help; }
+
+.orbit-sat-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+.orbit-satellite.leaf .orbit-sat-dot { background: var(--muted); box-shadow: none; }
+.orbit-sat-char { font-size: 16px; font-weight: 600; line-height: 1; }
+.orbit-sat-pinyin { font-family: var(--font-pinyin); font-size: 9px; color: var(--muted); }
 .orbit-satellite.navigable .orbit-sat-pinyin { color: var(--accent); }
 
 @media (max-width: 768px) {
-  .orbit-wrap { width: min(320px, 88vw); height: min(320px, 88vw); }
-  .orbit-center { width: 104px; padding: 10px 8px; }
-  .orbit-hanzi { font-size: 24px; }
-  .orbit-label { font-size: 9px; max-width: 96px; }
-  .orbit-satellite { width: 62px; padding: 6px 4px; }
-  .orbit-sat-char { font-size: 15px; }
+  .orbit-wrap { width: min(300px, 86vw); height: min(300px, 86vw); }
+  .orbit-center { width: 118px; padding: 8px; }
+  .orbit-hanzi { font-size: 21px; }
+  .orbit-label { font-size: 8px; max-width: 88px; }
+  .orbit-satellite { width: 58px; }
+  .orbit-sat-char { font-size: 13px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit-track, .orbit-satellite { animation: none; }
 }
 
 /* --- Écriture (tracé) --- */
