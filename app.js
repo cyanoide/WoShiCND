@@ -956,8 +956,18 @@ function renderExplorerPage() {
 // calculé à partir de la taille réelle du conteneur (responsive).
 function sizeOrbit() {
   const wrap = document.getElementById('orbitWrap');
-  if (!wrap) return;
-  const radius = wrap.clientWidth * 0.36;
+  const centerEl = document.querySelector('.orbit-center');
+  const satEl = document.querySelector('.orbit-satellite');
+  if (!wrap || !centerEl || !satEl) return;
+
+  // Rayon calculé à partir des tailles RÉELLEMENT rendues (pas un ratio du
+  // conteneur à l'aveugle) : garantit qu'un satellite ne chevauche jamais le
+  // centre, quelle que soit la taille d'écran. gap = marge visible entre eux.
+  const gap = 14;
+  const desired = (centerEl.clientWidth / 2) + (satEl.clientWidth / 2) + gap;
+  const maxAllowed = (wrap.clientWidth / 2) - (satEl.clientWidth / 2) - 4;
+  const radius = Math.min(desired, maxAllowed);
+
   wrap.querySelectorAll('.orbit-track').forEach(track => {
     track.style.setProperty('--r', radius + 'px');
   });

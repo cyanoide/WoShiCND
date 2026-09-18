@@ -115,6 +115,26 @@ body {
   z-index: 0;
 }
 
+/* Patch ciblé PWA installée sur iOS : confirmé présent uniquement en mode
+   standalone (donc pas la barre d'outils Safari, qui est hors de notre
+   contrôle et hors sujet ici) — une bande du fond blanc par défaut du
+   WebView reste visible sous le contenu malgré height:100dvh/-webkit-fill-
+   available sur .app. Repeint de force cette zone avec notre couleur de
+   thème, quelle que soit la cause géométrique exacte du vide. Inactif en
+   navigation normale (display-mode: browser), où il ne sert à rien. */
+.safe-bottom-fill { display: none; }
+@media (display-mode: standalone) {
+  .safe-bottom-fill {
+    display: block;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    height: max(40px, env(safe-area-inset-bottom, 0px));
+    background: var(--bg);
+    z-index: 10;
+    pointer-events: none;
+  }
+}
+
 .layout {
   display: flex;
   width: 100%;
