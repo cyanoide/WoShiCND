@@ -5,7 +5,10 @@
 
 :root {
   --font-main: 'Rajdhani', sans-serif;
-  --font-mono: 'Share Tech Mono', monospace;
+  /* Share Tech Mono n'a pas les voyelles à ton du pinyin (ā ǐ ǒ ǚ...) : le
+     navigateur bascule alors glyphe par glyphe sur 'Noto Sans Mono', qui les
+     couvre, avant le monospace système générique. */
+  --font-mono: 'Share Tech Mono', 'Noto Sans Mono', monospace;
 }
 
 .app.light {
