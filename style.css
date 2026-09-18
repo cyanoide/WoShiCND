@@ -307,8 +307,12 @@ body {
 /* --- Theme / language toggles --- */
 .toolbar-toggles {
   position: fixed;
-  top: 16px;
-  right: 20px;
+  /* max() plutôt que top:16px seul : sur iPhone avec Dynamic Island/encoche,
+     16px depuis le vrai bord du viewport (on s'étend dessous grâce à
+     viewport-fit=cover) plaçait les boutons SOUS la zone système, invisibles
+     derrière elle. env(safe-area-inset-top) redescend sous cette zone. */
+  top: max(16px, env(safe-area-inset-top, 0px));
+  right: max(20px, env(safe-area-inset-right, 0px));
   z-index: 100;
   display: flex;
   align-items: center;
@@ -874,13 +878,14 @@ body {
     width: 100%; min-width: unset; height: 40%; max-height: 40%; flex-shrink: 0;
     border-right: none; border-bottom: 1px solid var(--border);
     padding: 56px 16px 14px 18px;
+    padding-top: calc(56px + env(safe-area-inset-top, 0px));
     overflow-y: auto;
   }
   .panel-right { height: 60%; flex: 1; }
   .panel-right-inner { padding: 16px 16px 20px; }
   .menu-title { font-size: 20px; letter-spacing: 3px; }
   .menu-item { padding: 7px 10px; font-size: 13px; }
-  .toolbar-toggles { top: 12px; right: 12px; gap: 6px; }
+  .toolbar-toggles { top: max(12px, env(safe-area-inset-top, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); gap: 6px; }
   .theme-toggle { padding: 6px 8px; }
   .page-header { margin-bottom: 12px; }
   .page-title { font-size: 22px; }
