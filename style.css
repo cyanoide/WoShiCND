@@ -68,28 +68,21 @@
 }
 
 /* #app (id, spécificité 100) écrasait silencieusement le height de .app (classe,
-   spécificité 10) plus bas — TOUS les fixes précédents sur .app étaient donc
-   sans effet, la règle qui s'appliquait vraiment était juste "height:100%" ici,
-   sans le fallback vh/dvh/-webkit-fill-available. #app est retiré de ce
-   sélecteur pour que .app soit la seule source de vérité sur sa taille. */
+   spécificité 10) plus bas — #app est retiré de ce sélecteur pour que .app
+   reste la seule source de vérité sur sa taille. Sinon, configuration
+   d'origine restaurée telle quelle : c'est la seule dont on ait la certitude
+   qu'elle ne casse rien en mode standalone iOS (tout ce qu'on a essayé
+   depuis — position:fixed sur body, -webkit-fill-available — a soit été
+   sans effet, soit activement cassé l'affichage/le bouton thème). */
 html, body {
   width: 100%;
   height: 100%;
-  height: -webkit-fill-available;
 }
 
 body {
   font-family: var(--font-main);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
-  overscroll-behavior: none;
-  /* overflow:hidden seul n'empêche pas toujours le rebond élastique (bounce)
-     d'iOS Safari, qui peut faire glisser toute la page et révéler le blanc
-     natif au-delà du document — exactement une barre en bas au retour du
-     rebond. position:fixed sur body bloque le scroll du document lui-même,
-     là où tout le défilement réel se fait dans .panel-right-inner. */
-  position: fixed;
-  inset: 0;
 }
 
 .app {
@@ -97,7 +90,6 @@ body {
   width: 100%;
   height: 100vh;
   height: 100dvh;
-  height: -webkit-fill-available;
   background: var(--bg);
   color: var(--text);
   transition: background 0.6s ease, color 0.6s ease;
