@@ -1,4 +1,4 @@
-const CACHE = 'woshicnd-v1';
+const CACHE = 'woshicnd-v2';
 const ASSETS = [
   './',
   './index.html',

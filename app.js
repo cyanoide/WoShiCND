@@ -4,6 +4,7 @@
 
 const state = {
   theme: localStorage.getItem('woshicnd-theme') || 'light',
+  lang: localStorage.getItem('woshicnd-lang') || 'fr',
   category: 'fondations',
   openCards: new Set(),
   selectedRadical: null,
@@ -14,9 +15,49 @@ const state = {
     revealed: false,
   },
   write: {
+    scope: 'all',
+    shuffled: false,
     pool: [],
     index: 0,
   },
+};
+
+// Traduit un champ bilingue { fr, en } selon la langue courante.
+function t(obj) { return obj ? obj[state.lang] : obj; }
+
+// Chaînes d'interface (hors contenu pédagogique, qui vit dans data.js)
+const UI = {
+  wordsLoaded: { fr: 'MOTS CHARGÉS', en: 'WORDS LOADED' },
+  listen: { fr: '🔊 ECOUTER', en: '🔊 LISTEN' },
+  key: { fr: 'clé', en: 'key' },
+  words: { fr: 'MOTS', en: 'WORDS' },
+  phrasesCount: { fr: 'PHRASES', en: 'PHRASES' },
+  radicauxTitle: { fr: 'Radicaux', en: 'Radicals' },
+  radicauxSub: { fr: 'CLIQUE UNE CLÉ POUR VOIR TOUS LES MOTS QUI LA PARTAGENT', en: 'CLICK A KEY TO SEE EVERY WORD THAT SHARES IT' },
+  radicalResultsSub: { fr: 'TOUS LES MOTS AVEC CETTE CLÉ', en: 'ALL WORDS WITH THIS KEY' },
+  wordLinked: { fr: 'MOT LIÉ', en: 'WORD LINKED' },
+  wordsLinked: { fr: 'MOTS LIÉS', en: 'WORDS LINKED' },
+  noWordsYet: { fr: 'Aucun mot pour l\'instant.', en: 'No words yet.' },
+  revisionTitle: { fr: 'Révision', en: 'Review' },
+  revisionSub: { fr: 'FLASHCARDS · LES MOTS "À REVOIR" REVIENNENT EN PRIORITÉ', en: 'FLASHCARDS · WORDS MARKED "REVIEW" COME BACK FIRST' },
+  scopeAll: { fr: 'Tout', en: 'All' },
+  tapToReveal: { fr: 'TAPE POUR RÉVÉLER', en: 'TAP TO REVEAL' },
+  retry: { fr: '✗ à revoir', en: '✗ review again' },
+  know: { fr: '✓ je savais', en: '✓ I knew it' },
+  noWordsCategory: { fr: 'Pas de mots dans cette catégorie pour l\'instant.', en: 'No words in this category yet.' },
+  grammarTitle: { fr: 'Grammaire', en: 'Grammar' },
+  grammarSub: { fr: 'PIÈGES ET RÈGLES QUI CHANGENT TOUT', en: 'TRAPS AND RULES THAT CHANGE EVERYTHING' },
+  ecritureTitle: { fr: 'Écriture', en: 'Writing' },
+  ecritureSub: { fr: 'TRACE LE CARACTÈRE PAR-DESSUS LE MODÈLE', en: 'TRACE THE CHARACTER OVER THE TEMPLATE' },
+  characters: { fr: 'CARACTÈRES', en: 'CHARACTERS' },
+  prev: { fr: '← précédent', en: '← previous' },
+  next: { fr: 'suivant →', en: 'next →' },
+  clear: { fr: 'effacer', en: 'clear' },
+  shuffleOn: { fr: '🔀 aléatoire', en: '🔀 random' },
+  shuffleOff: { fr: '↧ alphabétique', en: '↧ alphabetical' },
+  traceToCheck: { fr: 'TRACE POUR VÉRIFIER', en: 'TRACE TO CHECK' },
+  wellWritten: { fr: 'BIEN ÉCRIT', en: 'WELL WRITTEN' },
+  needsWork: { fr: 'À RETRAVAILLER', en: 'NEEDS WORK' },
 };
 
 const PROGRESS_KEY = 'woshicnd-progress'; // { [id]: 'know' | 'retry' }
@@ -35,7 +76,6 @@ function applyTheme() {
   app.classList.remove('light', 'dark');
   app.classList.add(state.theme);
   app.dataset.theme = state.theme;
-  document.getElementById('themeThumb').textContent = state.theme === 'light' ? '☀' : '☾';
   document.getElementById('themeThumb').className = `theme-toggle-thumb ${state.theme}`;
   document.getElementById('themeLabel').textContent = state.theme === 'light' ? 'DAY' : 'NIGHT';
   localStorage.setItem('woshicnd-theme', state.theme);
@@ -44,6 +84,25 @@ function applyTheme() {
 document.getElementById('themeToggle').addEventListener('click', () => {
   state.theme = state.theme === 'light' ? 'dark' : 'light';
   applyTheme();
+  // le fantôme du mode écriture dépend des couleurs du thème : on attend que
+  // la classe .light/.dark soit peinte avant de relire les variables CSS,
+  // sinon le canvas capture encore les anciennes couleurs.
+  if (state.category === 'ecriture') requestAnimationFrame(() => requestAnimationFrame(renderContent));
+});
+
+// ---------------- LANGUE ----------------
+function applyLang() {
+  document.getElementById('langLabel').textContent = state.lang.toUpperCase();
+  document.getElementById('langThumb').className = `theme-toggle-thumb ${state.lang === 'fr' ? 'light' : 'dark'}`;
+  document.documentElement.lang = state.lang;
+  localStorage.setItem('woshicnd-lang', state.lang);
+}
+
+document.getElementById('langToggle').addEventListener('click', () => {
+  state.lang = state.lang === 'fr' ? 'en' : 'fr';
+  applyLang();
+  renderMenu();
+  renderContent();
 });
 
 // ---------------- AUDIO (Web Speech API) ----------------
@@ -74,8 +133,8 @@ function renderMenu() {
     <li class="menu-item ${state.category === c.id ? 'selected' : ''}" data-cat="${c.id}">
       <span class="menu-item-indicator">${state.category === c.id ? '▸' : '·'}</span>
       <span class="menu-item-labels">
-        <span>${c.label}</span>
-        <span class="menu-item-sub">${c.sub}</span>
+        <span>${t(c.label)}</span>
+        <span class="menu-item-sub">${t(c.sub)}</span>
       </span>
       ${state.category === c.id ? '<span class="menu-item-arrow">→</span>' : ''}
     </li>
@@ -91,11 +150,11 @@ function renderMenu() {
     });
   });
 
-  document.getElementById('wordCount').textContent = `${VOCAB.length} MOTS CHARGÉS`;
+  document.getElementById('wordCount').textContent = `${VOCAB.length} ${t(UI.wordsLoaded)}`;
 }
 
 // ---------------- WORD CARD ----------------
-function tagLabel(tag) { return TAG_LABEL[tag] || tag; }
+function tagLabel(tag) { return t(TAG_LABEL[tag]) || tag; }
 
 function emojiFor(char) { return EMOJI[char] || ''; }
 
@@ -114,7 +173,7 @@ function renderBreakdown(entry) {
     `;
   }).join('');
 
-  const meanings = entry.parts.map(p => `<b>${p.char}</b> ${p.meaning}`).join(' · ');
+  const meanings = entry.parts.map(p => `<b>${p.char}</b> ${t(p.meaning)}`).join(' · ');
   const resultEmoji = emojiFor(entry.hanzi);
   const isSentence = entry.cat === 'phrases';
 
@@ -131,8 +190,8 @@ function renderBreakdown(entry) {
         `}
       </div>
       <div class="breakdown-meaning">${meanings}</div>
-      <div class="breakdown-logic">💡 ${entry.logic}</div>
-      ${entry.note ? `<div class="breakdown-note">${entry.note}</div>` : ''}
+      <div class="breakdown-logic">💡 ${t(entry.logic)}</div>
+      ${entry.note ? `<div class="breakdown-note">${t(entry.note)}</div>` : ''}
     </div>
   `;
 }
@@ -148,10 +207,10 @@ function renderWordCard(entry) {
         ${isSentence ? '' : `<span class="word-pinyin">${entry.pinyin}</span>`}
       </div>
       ${isSentence ? `<div class="word-pinyin word-pinyin-sentence">${entry.pinyin}</div>` : ''}
-      <div class="word-fr">${em ? `<span class="word-fr-emoji">${em}</span> ` : ''}${entry.fr}</div>
+      <div class="word-fr">${em ? `<span class="word-fr-emoji">${em}</span> ` : ''}${t(entry.gloss)}</div>
       <div class="word-card-actions">
-        <button class="btn-audio" data-speak="${entry.hanzi}">🔊 ECOUTER</button>
-        ${entry.rad ? `<span class="word-radical-chip" data-radical="${entry.rad}">clé ${entry.rad}</span>` : ''}
+        <button class="btn-audio" data-speak="${entry.hanzi}">${t(UI.listen)}</button>
+        ${entry.rad ? `<span class="word-radical-chip" data-radical="${entry.rad}">${t(UI.key)} ${entry.rad}</span>` : ''}
       </div>
       ${open ? renderBreakdown(entry) : ''}
     </div>
@@ -203,19 +262,19 @@ function renderVocabPage(catId) {
   const content = document.getElementById('content');
 
   if (catId === 'phrases') {
-    const domains = [...new Set(words.map(w => w.domain))];
+    const domains = [...new Set(words.map(w => t(w.domain)))];
     content.innerHTML = `
-      ${pageHeader(cat.label, cat.sub + ' · ' + words.length + ' PHRASES')}
+      ${pageHeader(t(cat.label), t(cat.sub) + ' · ' + words.length + ' ' + t(UI.phrasesCount))}
       ${domains.map(d => `
         <div class="domain-block">
           <h3 class="domain-title">${d}</h3>
-          <div class="word-grid">${words.filter(w => w.domain === d).map(renderWordCard).join('')}</div>
+          <div class="word-grid">${words.filter(w => t(w.domain) === d).map(renderWordCard).join('')}</div>
         </div>
       `).join('')}
     `;
   } else {
     content.innerHTML = `
-      ${pageHeader(cat.label, cat.sub + ' · ' + words.length + ' MOTS')}
+      ${pageHeader(t(cat.label), t(cat.sub) + ' · ' + words.length + ' ' + t(UI.words))}
       <div class="word-grid">${words.map(renderWordCard).join('')}</div>
     `;
   }
@@ -225,12 +284,12 @@ function renderVocabPage(catId) {
 function renderGrammarPage() {
   const content = document.getElementById('content');
   content.innerHTML = `
-    ${pageHeader('Grammaire', 'PIÈGES ET RÈGLES QUI CHANGENT TOUT')}
+    ${pageHeader(t(UI.grammarTitle), t(UI.grammarSub))}
     <div class="grammar-list">
       ${GRAMMAR.map(g => `
         <div class="grammar-card">
-          <h3 class="grammar-title">${g.title}</h3>
-          <p class="grammar-rule">${g.rule}</p>
+          <h3 class="grammar-title">${t(g.title)}</h3>
+          <p class="grammar-rule">${t(g.rule)}</p>
           <div class="grammar-examples">
             ${g.examples.map(ex => `
               <div class="grammar-example ${ex.ok ? 'ok' : 'bad'}">
@@ -241,8 +300,8 @@ function renderGrammarPage() {
                     ${ex.ok ? `<button class="btn-audio" data-speak="${ex.hanzi}">🔊</button>` : ''}
                   </div>
                   <div class="grammar-example-pinyin">${ex.pinyin}</div>
-                  <div class="grammar-example-fr">${ex.fr}</div>
-                  ${ex.note ? `<div class="grammar-example-note">${ex.note}</div>` : ''}
+                  <div class="grammar-example-fr">${t(ex.fr)}</div>
+                  ${ex.note ? `<div class="grammar-example-note">${t(ex.note)}</div>` : ''}
                 </div>
               </div>
             `).join('')}
@@ -276,8 +335,8 @@ function renderRadicauxPage() {
       <div class="radical-card ${active ? 'active' : ''}" data-radical="${char}">
         <div class="radical-card-char">${char}${em ? ` <span class="radical-card-emoji">${em}</span>` : ''}</div>
         <div class="radical-card-pinyin">${r.pinyin}</div>
-        <div class="radical-card-meaning">${r.meaning}</div>
-        <div class="radical-card-count">${count} MOT${count > 1 ? 'S' : ''} LIÉ${count > 1 ? 'S' : ''}</div>
+        <div class="radical-card-meaning">${t(r.meaning)}</div>
+        <div class="radical-card-count">${count} ${t(count > 1 ? UI.wordsLinked : UI.wordLinked)}</div>
       </div>
     `;
   }).join('');
@@ -288,14 +347,14 @@ function renderRadicauxPage() {
     const r = RADICALS[state.selectedRadical];
     resultsHtml = `
       <div class="radical-results">
-        ${pageHeader(`${state.selectedRadical} · ${r.meaning}`, `TOUS LES MOTS AVEC CETTE CLÉ · ${matches.length}`)}
-        <div class="word-grid">${matches.map(renderWordCard).join('') || '<div class="flash-empty">Aucun mot pour l\'instant.</div>'}</div>
+        ${pageHeader(`${state.selectedRadical} · ${t(r.meaning)}`, `${t(UI.radicalResultsSub)} · ${matches.length}`)}
+        <div class="word-grid">${matches.map(renderWordCard).join('') || `<div class="flash-empty">${t(UI.noWordsYet)}</div>`}</div>
       </div>
     `;
   }
 
   content.innerHTML = `
-    ${pageHeader('Radicaux', 'CLIQUE UNE CLÉ POUR VOIR TOUS LES MOTS QUI LA PARTAGENT')}
+    ${pageHeader(t(UI.radicauxTitle), t(UI.radicauxSub))}
     <div class="radical-grid">${grid}</div>
     ${resultsHtml}
   `;
@@ -312,7 +371,7 @@ function renderRadicauxPage() {
 
 // ---------------- RÉVISION (flashcards) ----------------
 function flashScopes() {
-  return [{ id: 'all', label: 'Tout' }, ...CATEGORIES.filter(c => VOCAB.some(v => v.cat === c.id)).map(c => ({ id: c.id, label: c.label }))];
+  return [{ id: 'all', label: UI.scopeAll }, ...CATEGORIES.filter(c => VOCAB.some(v => v.cat === c.id)).map(c => ({ id: c.id, label: c.label }))];
 }
 
 function buildDeck() {
@@ -340,7 +399,7 @@ function renderRevisionPage() {
 
   const scopes = flashScopes();
   const scopeHtml = scopes.map(s => `
-    <button class="flash-scope-btn ${state.flash.scope === s.id ? 'active' : ''}" data-scope="${s.id}">${s.label}</button>
+    <button class="flash-scope-btn ${state.flash.scope === s.id ? 'active' : ''}" data-scope="${s.id}">${t(s.label)}</button>
   `).join('');
 
   const deck = state.flash.deck;
@@ -348,13 +407,13 @@ function renderRevisionPage() {
 
   let cardHtml;
   if (!entry) {
-    cardHtml = `<div class="flash-empty">Pas de mots dans cette catégorie pour l'instant.</div>`;
+    cardHtml = `<div class="flash-empty">${t(UI.noWordsCategory)}</div>`;
   } else if (!state.flash.revealed) {
     cardHtml = `
       <div class="flash-card" id="flashCard">
         <span class="flash-progress">${state.flash.index + 1} / ${deck.length}</span>
         <div class="flash-hanzi">${entry.hanzi}</div>
-        <div class="flash-hint">TAPE POUR RÉVÉLER</div>
+        <div class="flash-hint">${t(UI.tapToReveal)}</div>
       </div>
     `;
   } else {
@@ -366,20 +425,20 @@ function renderRevisionPage() {
         <div class="flash-back">
           ${em ? `<div class="flash-emoji">${em}</div>` : ''}
           <div class="flash-pinyin">${entry.pinyin}</div>
-          <div class="flash-fr">${entry.fr}</div>
-          <div class="flash-logic">💡 ${entry.logic}</div>
+          <div class="flash-fr">${t(entry.gloss)}</div>
+          <div class="flash-logic">💡 ${t(entry.logic)}</div>
         </div>
       </div>
       <div class="flash-controls">
-        <button class="flash-btn retry" id="btnRetry">✗ à revoir</button>
-        <button class="btn-audio" id="btnFlashAudio">🔊 ECOUTER</button>
-        <button class="flash-btn know" id="btnKnow">✓ je savais</button>
+        <button class="flash-btn retry" id="btnRetry">${t(UI.retry)}</button>
+        <button class="btn-audio" id="btnFlashAudio">${t(UI.listen)}</button>
+        <button class="flash-btn know" id="btnKnow">${t(UI.know)}</button>
       </div>
     `;
   }
 
   content.innerHTML = `
-    ${pageHeader('Révision', 'FLASHCARDS · LES MOTS "À REVOIR" REVIENNENT EN PRIORITÉ')}
+    ${pageHeader(t(UI.revisionTitle), t(UI.revisionSub))}
     <div class="flash-wrap">
       <div class="flash-scope">${scopeHtml}</div>
       ${cardHtml}
@@ -423,19 +482,29 @@ function renderRevisionPage() {
 }
 
 // ---------------- ÉCRITURE (tracé au doigt / à la souris) ----------------
-function buildCharacterPool() {
+function writeScopes() {
+  return [{ id: 'all', label: UI.scopeAll }, ...CATEGORIES.filter(c => VOCAB.some(v => v.cat === c.id)).map(c => ({ id: c.id, label: c.label }))];
+}
+
+function buildCharacterPool(scope) {
   const map = new Map(); // char -> { pinyin, meaning }
   const isHanzi = (c) => /[一-鿿]/.test(c);
+  const includeAll = !scope || scope === 'all';
 
-  Object.entries(RADICALS).forEach(([char, r]) => {
-    if (isHanzi(char)) map.set(char, { pinyin: r.pinyin, meaning: r.meaning });
-  });
-  VOCAB.forEach(v => {
+  if (includeAll) {
+    Object.entries(RADICALS).forEach(([char, r]) => {
+      if (isHanzi(char)) map.set(char, { pinyin: r.pinyin, meaning: r.meaning });
+    });
+  }
+
+  const vocabPool = includeAll ? VOCAB : VOCAB.filter(v => v.cat === scope);
+
+  vocabPool.forEach(v => {
     if (v.hanzi.length === 1 && isHanzi(v.hanzi) && !map.has(v.hanzi)) {
-      map.set(v.hanzi, { pinyin: v.pinyin, meaning: v.fr });
+      map.set(v.hanzi, { pinyin: v.pinyin, meaning: v.gloss });
     }
   });
-  VOCAB.forEach(v => {
+  vocabPool.forEach(v => {
     (v.parts || []).forEach(p => {
       if (p.char.length === 1 && isHanzi(p.char) && !map.has(p.char)) {
         map.set(p.char, { pinyin: p.pinyin, meaning: p.meaning });
@@ -443,40 +512,74 @@ function buildCharacterPool() {
     });
   });
 
-  return [...map.entries()]
-    .map(([char, info]) => ({ char, ...info }))
-    .sort((a, b) => a.char.localeCompare(b.char, 'zh'));
+  let list = [...map.entries()].map(([char, info]) => ({ char, ...info }));
+
+  if (state.write.shuffled) {
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+  } else {
+    list.sort((a, b) => a.char.localeCompare(b.char, 'zh'));
+  }
+  return list;
+}
+
+function rebuildWritePool() {
+  state.write.pool = buildCharacterPool(state.write.scope);
+  state.write.index = 0;
 }
 
 function renderEcriturePage() {
-  if (state.write.pool.length === 0) state.write.pool = buildCharacterPool();
+  if (state.write.pool.length === 0) rebuildWritePool();
   const pool = state.write.pool;
   const item = pool[state.write.index];
-  const em = emojiFor(item.char);
+  const em = item ? emojiFor(item.char) : '';
+
+  const scopes = writeScopes();
+  const scopeHtml = scopes.map(s => `
+    <button class="flash-scope-btn ${state.write.scope === s.id ? 'active' : ''}" data-wscope="${s.id}">${t(s.label)}</button>
+  `).join('');
 
   const content = document.getElementById('content');
   content.innerHTML = `
-    ${pageHeader('Écriture', `TRACE LE CARACTÈRE PAR-DESSUS LE MODÈLE · ${pool.length} CARACTÈRES`)}
+    ${pageHeader(t(UI.ecritureTitle), `${t(UI.ecritureSub)} · ${pool.length} ${t(UI.characters)}`)}
     <div class="write-wrap">
+      <div class="flash-scope">${scopeHtml}</div>
+      ${item ? `
       <div class="write-info">
         <span class="write-progress">${state.write.index + 1} / ${pool.length}</span>
         ${em ? `<span class="write-emoji">${em}</span>` : ''}
         <span class="write-pinyin">${item.pinyin}</span>
-        <span class="write-meaning">${item.meaning}</span>
+        <span class="write-meaning">${t(item.meaning)}</span>
       </div>
       <div class="canvas-stack" id="canvasStack">
         <canvas id="bgCanvas"></canvas>
         <canvas id="fgCanvas"></canvas>
       </div>
-      <div class="write-status" id="writeStatus">TRACE POUR VÉRIFIER</div>
+      <div class="write-status" id="writeStatus">${t(UI.traceToCheck)}</div>
       <div class="write-controls">
-        <button class="flash-btn" id="btnPrev">← précédent</button>
-        <button class="btn-audio" id="btnWriteAudio">🔊 ECOUTER</button>
-        <button class="flash-btn" id="btnClear">effacer</button>
-        <button class="flash-btn" id="btnNext">suivant →</button>
+        <button class="flash-btn" id="btnPrev">${t(UI.prev)}</button>
+        <button class="btn-audio" id="btnWriteAudio">${t(UI.listen)}</button>
+        <button class="flash-btn" id="btnClear">${t(UI.clear)}</button>
+        <button class="flash-btn" id="btnNext">${t(UI.next)}</button>
       </div>
+      <div class="write-controls">
+        <button class="flash-btn ${state.write.shuffled ? 'active' : ''}" id="btnShuffle">${state.write.shuffled ? t(UI.shuffleOn) : t(UI.shuffleOff)}</button>
+      </div>
+      ` : `<div class="flash-empty">${t(UI.noWordsCategory)}</div>`}
     </div>
   `;
+
+  content.querySelectorAll('[data-wscope]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.write.scope = btn.dataset.wscope;
+      rebuildWritePool();
+      renderContent();
+    });
+  });
+
+  if (!item) return;
 
   setupWriteCanvas(item.char);
 
@@ -487,6 +590,11 @@ function renderEcriturePage() {
   document.getElementById('btnNext').addEventListener('click', () => {
     state.write.index = (state.write.index + 1) % pool.length;
     renderEcriturePage();
+  });
+  document.getElementById('btnShuffle').addEventListener('click', () => {
+    state.write.shuffled = !state.write.shuffled;
+    rebuildWritePool();
+    renderContent();
   });
   document.getElementById('btnWriteAudio').addEventListener('click', () => speak(item.char));
   document.getElementById('btnClear').addEventListener('click', () => {
@@ -501,7 +609,7 @@ function resetWriteFeedback() {
   const status = document.getElementById('writeStatus');
   if (stack) stack.classList.remove('good', 'bad');
   if (status) {
-    status.textContent = 'TRACE POUR VÉRIFIER';
+    status.textContent = t(UI.traceToCheck);
     status.className = 'write-status';
   }
 }
@@ -529,7 +637,6 @@ function setupWriteCanvas(char) {
   bgCtx.scale(dpr, dpr);
   const styles = getComputedStyle(document.getElementById('app'));
   const border = styles.getPropertyValue('--border').trim();
-  const text = styles.getPropertyValue('--text').trim();
   const accent = styles.getPropertyValue('--accent').trim();
   const good = styles.getPropertyValue('--good').trim();
   const bad = styles.getPropertyValue('--bad').trim();
@@ -545,8 +652,11 @@ function setupWriteCanvas(char) {
   bgCtx.stroke();
   bgCtx.setLineDash([]);
 
-  bgCtx.globalAlpha = 0.16;
-  bgCtx.fillStyle = text;
+  // Le fantôme utilise la couleur d'accent (pas --text) : en thème sombre, un texte
+  // gris clair à faible opacité sur fond noir devient quasi invisible, alors que
+  // l'accent (jaune en dark, bleu en light) reste lisible dans les deux thèmes.
+  bgCtx.globalAlpha = 0.22;
+  bgCtx.fillStyle = accent;
   bgCtx.font = `${size * 0.72}px ${fontStack}`;
   bgCtx.textAlign = 'center';
   bgCtx.textBaseline = 'middle';
@@ -628,12 +738,12 @@ function setupWriteCanvas(char) {
     // spatiale (glyphe gonflé) absorbe déjà l'imprécision du doigt/souris, donc
     // ce qui doit vraiment être exigeant, c'est d'avoir tracé TOUT le caractère.
     const score = coverage * 0.65 + precision * 0.35;
-    const isGood = score >= 0.75;
+    const isGood = score >= 0.65;
 
     stack.classList.toggle('good', isGood);
     stack.classList.toggle('bad', !isGood);
     status.className = `write-status ${isGood ? 'good' : 'bad'}`;
-    status.textContent = isGood ? `✓ BIEN ÉCRIT (${Math.round(score * 100)}%)` : `✗ À RETRAVAILLER (${Math.round(score * 100)}%)`;
+    status.textContent = `${isGood ? '✓' : '✗'} ${t(isGood ? UI.wellWritten : UI.needsWork)} (${Math.round(score * 100)}%)`;
 
     // recolore le tracé en vert/rouge pour un retour visuel immédiat
     fgCtx.save();
@@ -714,6 +824,7 @@ function startNoise() {
 
 // ---------------- INIT ----------------
 applyTheme();
+applyLang();
 renderMenu();
 renderContent();
 startNoise();

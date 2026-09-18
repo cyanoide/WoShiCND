@@ -5,10 +5,12 @@
 
 :root {
   --font-main: 'Rajdhani', sans-serif;
-  /* Share Tech Mono n'a pas les voyelles à ton du pinyin (ā ǐ ǒ ǚ...) : le
-     navigateur bascule alors glyphe par glyphe sur 'Noto Sans Mono', qui les
-     couvre, avant le monospace système générique. */
-  --font-mono: 'Share Tech Mono', 'Noto Sans Mono', monospace;
+  --font-mono: 'Share Tech Mono', monospace;
+  /* Share Tech Mono n'a pas les voyelles à ton du pinyin (ā ǐ ǒ ǚ...) : plutôt
+     que de laisser le navigateur basculer glyphe par glyphe sur une police de
+     secours différente selon le système, tout le pinyin utilise une police
+     dédiée à la couverture Unicode complète. */
+  --font-pinyin: 'Noto Sans Mono', monospace;
 }
 
 .app.light {
@@ -170,7 +172,7 @@ body {
 @keyframes blink { 50% { opacity: 0; } }
 
 .menu-subtitle {
-  font-family: var(--font-mono);
+  font-family: var(--font-pinyin);
   font-size: 10px;
   letter-spacing: 2px;
   color: var(--muted);
@@ -274,12 +276,17 @@ body {
   text-transform: uppercase;
 }
 
-/* --- Theme toggle --- */
-.theme-toggle {
+/* --- Theme / language toggles --- */
+.toolbar-toggles {
   position: fixed;
   top: 16px;
   right: 20px;
   z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.theme-toggle {
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 2px;
@@ -373,7 +380,7 @@ body {
 
 .word-card-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .word-hanzi { font-size: 34px; font-weight: 600; line-height: 1; }
-.word-pinyin { font-family: var(--font-mono); font-size: 13px; color: var(--accent); letter-spacing: 0.5px; }
+.word-pinyin { font-family: var(--font-pinyin); font-size: 13px; color: var(--accent); letter-spacing: 0.5px; }
 .word-fr { margin-top: 6px; font-size: 15px; color: var(--text); opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; }
 .word-fr-emoji { font-size: 16px; }
 
@@ -431,7 +438,7 @@ body {
 .breakdown-part-emoji { font-size: 16px; line-height: 1; margin-bottom: 2px; }
 .breakdown-part-char { font-size: 22px; line-height: 1.1; }
 .breakdown-result { border-color: var(--accent); }
-.breakdown-part-pinyin { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 2px; }
+.breakdown-part-pinyin { font-family: var(--font-pinyin); font-size: 10px; color: var(--muted); margin-top: 2px; }
 .breakdown-part-tag {
   font-family: var(--font-mono);
   font-size: 8px;
@@ -484,7 +491,7 @@ body {
   border-bottom: 1px dashed var(--border);
 }
 .word-hanzi-sentence { font-size: 20px; line-height: 1.4; font-weight: 500; }
-.word-pinyin-sentence { font-family: var(--font-mono); font-size: 12px; color: var(--accent); margin-top: 4px; }
+.word-pinyin-sentence { font-family: var(--font-pinyin); font-size: 12px; color: var(--accent); margin-top: 4px; }
 
 /* --- Grammaire --- */
 .grammar-list { display: flex; flex-direction: column; gap: 20px; }
@@ -506,7 +513,7 @@ body {
 .grammar-example.bad { border-color: rgba(200, 60, 60, 0.4); }
 .grammar-example-mark { font-size: 14px; margin-top: 2px; }
 .grammar-example-hanzi { font-size: 18px; display: flex; align-items: center; gap: 8px; }
-.grammar-example-pinyin { font-family: var(--font-mono); font-size: 12px; color: var(--accent); margin-top: 3px; }
+.grammar-example-pinyin { font-family: var(--font-pinyin); font-size: 12px; color: var(--accent); margin-top: 3px; }
 .grammar-example-fr { font-size: 13px; color: var(--text); opacity: 0.8; margin-top: 2px; }
 .grammar-example-note { font-size: 11px; color: var(--muted); font-style: italic; margin-top: 4px; }
 
@@ -517,7 +524,7 @@ body {
   font-family: var(--font-mono); font-size: 12px; letter-spacing: 1px; color: var(--muted);
   text-transform: uppercase;
 }
-.write-pinyin { color: var(--accent); font-size: 14px; }
+.write-pinyin { font-family: var(--font-pinyin); color: var(--accent); font-size: 14px; }
 .write-meaning { color: var(--text); opacity: 0.8; }
 .write-emoji { font-size: 16px; }
 .canvas-stack {
@@ -563,7 +570,7 @@ body {
 .radical-card-char { font-size: 30px; }
 .radical-card-emoji { font-size: 20px; vertical-align: middle; }
 .radical-card-meaning { font-size: 13px; margin-top: 4px; opacity: 0.85; }
-.radical-card-pinyin { font-family: var(--font-mono); font-size: 11px; color: var(--accent); }
+.radical-card-pinyin { font-family: var(--font-pinyin); font-size: 11px; color: var(--accent); }
 .radical-card-count { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-top: 6px; letter-spacing: 1px; }
 
 .radical-results { margin-top: 28px; }
@@ -616,7 +623,7 @@ body {
 .flash-emoji { font-size: 34px; }
 .flash-hint { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; }
 .flash-back { display: flex; flex-direction: column; gap: 6px; align-items: center; width: 100%; }
-.flash-pinyin { font-family: var(--font-mono); font-size: 16px; color: var(--accent); }
+.flash-pinyin { font-family: var(--font-pinyin); font-size: 16px; color: var(--accent); }
 .flash-fr { font-size: 20px; text-transform: uppercase; letter-spacing: 1px; }
 .flash-logic { font-size: 12px; color: var(--muted); max-width: 320px; margin-top: 6px; }
 
@@ -690,7 +697,8 @@ body {
   .panel-right-inner { padding: 22px 18px 60px; }
   .menu-title { font-size: 20px; letter-spacing: 3px; }
   .menu-item { padding: 7px 10px; font-size: 13px; }
-  .theme-toggle { top: 12px; right: 12px; padding: 6px 10px; }
+  .toolbar-toggles { top: 12px; right: 12px; gap: 6px; }
+  .theme-toggle { padding: 6px 8px; }
   .page-title { font-size: 22px; }
   .word-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
   .word-hanzi { font-size: 28px; }

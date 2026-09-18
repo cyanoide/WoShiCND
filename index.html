@@ -27,12 +27,20 @@
   <div class="app light" id="app" data-theme="light">
     <div class="bg-grid"></div>
 
-    <button class="theme-toggle" id="themeToggle" aria-label="Changer de thème" title="Jour / Nuit">
-      <span class="theme-toggle-track">
-        <span class="theme-toggle-thumb light" id="themeThumb">☀</span>
-      </span>
-      <span class="theme-toggle-label" id="themeLabel">DAY</span>
-    </button>
+    <div class="toolbar-toggles">
+      <button class="theme-toggle" id="langToggle" aria-label="Switch language" title="FR / EN">
+        <span class="theme-toggle-track">
+          <span class="theme-toggle-thumb light" id="langThumb"></span>
+        </span>
+        <span class="theme-toggle-label" id="langLabel">FR</span>
+      </button>
+      <button class="theme-toggle" id="themeToggle" aria-label="Changer de thème" title="Jour / Nuit">
+        <span class="theme-toggle-track">
+          <span class="theme-toggle-thumb light" id="themeThumb"></span>
+        </span>
+        <span class="theme-toggle-label" id="themeLabel">DAY</span>
+      </button>
+    </div>
 
     <div class="layout">
       <aside class="panel-left">
