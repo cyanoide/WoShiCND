@@ -9,8 +9,8 @@
   /* Share Tech Mono n'a pas les voyelles à ton du pinyin (ā ǐ ǒ ǚ...) : plutôt
      que de laisser le navigateur basculer glyphe par glyphe sur une police de
      secours différente selon le système, tout le pinyin utilise une police
-     dédiée à la couverture Unicode complète. */
-  --font-pinyin: 'Noto Sans Mono', monospace;
+     mono dédiée qui couvre ces glyphes tout en restant dans l'esprit terminal. */
+  --font-pinyin: 'JetBrains Mono', 'Noto Sans Mono', monospace;
 }
 
 .app.light {
@@ -153,7 +153,7 @@ body {
 }
 
 .menu-title {
-  font-family: var(--font-main);
+  font-family: var(--font-pinyin);
   font-size: 25px;
   font-weight: 600;
   letter-spacing: 4px;
@@ -578,9 +578,14 @@ body {
 /* --- Révision / flashcards --- */
 .flash-wrap { display: flex; flex-direction: column; align-items: center; gap: 22px; padding-top: 10px; }
 .flash-scope {
-  display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+  display: flex; flex-wrap: nowrap; gap: 8px; justify-content: flex-start;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin;
+  max-width: 100%; padding: 2px 2px 6px;
 }
+.flash-scope::-webkit-scrollbar { height: 3px; }
+.flash-scope::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 .flash-scope-btn {
+  flex: 0 0 auto;
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 1px;
@@ -591,8 +596,10 @@ body {
   background: transparent;
   color: var(--muted);
   cursor: pointer;
+  white-space: nowrap;
 }
 .flash-scope-btn.active { color: var(--accent); border-color: var(--accent); background: var(--item-selected); }
+.shuffle-chip { border-style: dashed; }
 
 .flash-card {
   width: min(420px, 90%);
@@ -694,13 +701,25 @@ body {
     padding: 56px 16px 14px 18px;
   }
   .panel-right { height: 60vh; }
-  .panel-right-inner { padding: 22px 18px 60px; }
+  .panel-right-inner { padding: 16px 16px 20px; }
   .menu-title { font-size: 20px; letter-spacing: 3px; }
   .menu-item { padding: 7px 10px; font-size: 13px; }
   .toolbar-toggles { top: 12px; right: 12px; gap: 6px; }
   .theme-toggle { padding: 6px 8px; }
+  .page-header { margin-bottom: 12px; }
   .page-title { font-size: 22px; }
+  .page-sub { font-size: 10px; }
   .word-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
   .word-hanzi { font-size: 28px; }
   .flash-hanzi { font-size: 48px; }
+
+  /* Écriture : tout doit tenir sans scroll dans les 60vh du panneau droit */
+  .write-wrap { gap: 8px; }
+  .flash-scope { padding-bottom: 4px; }
+  .write-info { font-size: 10px; gap: 8px; }
+  .write-pinyin { font-size: 12px; }
+  .canvas-stack { width: min(200px, 50vw); height: min(200px, 50vw); }
+  .write-status { font-size: 10px; min-height: 13px; }
+  .write-controls { gap: 6px; }
+  .write-controls .flash-btn, .write-controls .btn-audio { padding: 6px 8px; font-size: 10px; }
 }

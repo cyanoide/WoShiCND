@@ -545,7 +545,10 @@ function renderEcriturePage() {
   content.innerHTML = `
     ${pageHeader(t(UI.ecritureTitle), `${t(UI.ecritureSub)} · ${pool.length} ${t(UI.characters)}`)}
     <div class="write-wrap">
-      <div class="flash-scope">${scopeHtml}</div>
+      <div class="flash-scope write-scope-row">
+        <button class="flash-scope-btn shuffle-chip ${state.write.shuffled ? 'active' : ''}" id="btnShuffle">${state.write.shuffled ? t(UI.shuffleOn) : t(UI.shuffleOff)}</button>
+        ${scopeHtml}
+      </div>
       ${item ? `
       <div class="write-info">
         <span class="write-progress">${state.write.index + 1} / ${pool.length}</span>
@@ -564,9 +567,6 @@ function renderEcriturePage() {
         <button class="flash-btn" id="btnClear">${t(UI.clear)}</button>
         <button class="flash-btn" id="btnNext">${t(UI.next)}</button>
       </div>
-      <div class="write-controls">
-        <button class="flash-btn ${state.write.shuffled ? 'active' : ''}" id="btnShuffle">${state.write.shuffled ? t(UI.shuffleOn) : t(UI.shuffleOff)}</button>
-      </div>
       ` : `<div class="flash-empty">${t(UI.noWordsCategory)}</div>`}
     </div>
   `;
@@ -577,6 +577,11 @@ function renderEcriturePage() {
       rebuildWritePool();
       renderContent();
     });
+  });
+  document.getElementById('btnShuffle').addEventListener('click', () => {
+    state.write.shuffled = !state.write.shuffled;
+    rebuildWritePool();
+    renderContent();
   });
 
   if (!item) return;
@@ -590,11 +595,6 @@ function renderEcriturePage() {
   document.getElementById('btnNext').addEventListener('click', () => {
     state.write.index = (state.write.index + 1) % pool.length;
     renderEcriturePage();
-  });
-  document.getElementById('btnShuffle').addEventListener('click', () => {
-    state.write.shuffled = !state.write.shuffled;
-    rebuildWritePool();
-    renderContent();
   });
   document.getElementById('btnWriteAudio').addEventListener('click', () => speak(item.char));
   document.getElementById('btnClear').addEventListener('click', () => {
