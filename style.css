@@ -26,6 +26,10 @@
   --tag-son: #cc6a00;
   --tag-mot: #007a55;
   --tag-forme: #8800aa;
+  --good: #0a8a3c;
+  --good-glow: rgba(10, 138, 60, 0.2);
+  --bad: #cc2222;
+  --bad-glow: rgba(204, 34, 34, 0.2);
 }
 
 .app.dark {
@@ -46,6 +50,10 @@
   --tag-son: #ff9d3d;
   --tag-mot: #4be3a4;
   --tag-forme: #d68bff;
+  --good: #39ff6a;
+  --good-glow: rgba(57, 255, 106, 0.25);
+  --bad: #ff4d4d;
+  --bad-glow: rgba(255, 77, 77, 0.25);
 }
 
 *, *::before, *::after {
@@ -508,15 +516,31 @@ body {
 }
 .write-pinyin { color: var(--accent); font-size: 14px; }
 .write-meaning { color: var(--text); opacity: 0.8; }
+.write-emoji { font-size: 16px; }
 .canvas-stack {
   position: relative;
   width: min(340px, 80vw);
   height: min(340px, 80vw);
   touch-action: none;
+  border-radius: 2px;
+  box-shadow: 0 0 0 0 transparent;
+  transition: box-shadow 0.25s ease;
 }
 .canvas-stack canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.canvas-stack.good { box-shadow: 0 0 18px var(--good-glow), 0 0 0 2px var(--good); }
+.canvas-stack.bad { box-shadow: 0 0 18px var(--bad-glow), 0 0 0 2px var(--bad); }
 #fgCanvas { cursor: crosshair; }
 .write-controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.write-status {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+  min-height: 16px;
+}
+.write-status.good { color: var(--good); }
+.write-status.bad { color: var(--bad); }
 
 /* --- Radicaux page --- */
 .radical-grid {

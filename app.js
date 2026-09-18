@@ -150,7 +150,7 @@ function renderWordCard(entry) {
       ${isSentence ? `<div class="word-pinyin word-pinyin-sentence">${entry.pinyin}</div>` : ''}
       <div class="word-fr">${em ? `<span class="word-fr-emoji">${em}</span> ` : ''}${entry.fr}</div>
       <div class="word-card-actions">
-        <button class="btn-audio" data-speak="${entry.hanzi}">🔊 écouter</button>
+        <button class="btn-audio" data-speak="${entry.hanzi}">🔊 ECOUTER</button>
         ${entry.rad ? `<span class="word-radical-chip" data-radical="${entry.rad}">clé ${entry.rad}</span>` : ''}
       </div>
       ${open ? renderBreakdown(entry) : ''}
@@ -372,7 +372,7 @@ function renderRevisionPage() {
       </div>
       <div class="flash-controls">
         <button class="flash-btn retry" id="btnRetry">✗ à revoir</button>
-        <button class="btn-audio" id="btnFlashAudio">🔊 écouter</button>
+        <button class="btn-audio" id="btnFlashAudio">🔊 ECOUTER</button>
         <button class="flash-btn know" id="btnKnow">✓ je savais</button>
       </div>
     `;
@@ -452,6 +452,7 @@ function renderEcriturePage() {
   if (state.write.pool.length === 0) state.write.pool = buildCharacterPool();
   const pool = state.write.pool;
   const item = pool[state.write.index];
+  const em = emojiFor(item.char);
 
   const content = document.getElementById('content');
   content.innerHTML = `
@@ -459,6 +460,7 @@ function renderEcriturePage() {
     <div class="write-wrap">
       <div class="write-info">
         <span class="write-progress">${state.write.index + 1} / ${pool.length}</span>
+        ${em ? `<span class="write-emoji">${em}</span>` : ''}
         <span class="write-pinyin">${item.pinyin}</span>
         <span class="write-meaning">${item.meaning}</span>
       </div>
@@ -466,9 +468,10 @@ function renderEcriturePage() {
         <canvas id="bgCanvas"></canvas>
         <canvas id="fgCanvas"></canvas>
       </div>
+      <div class="write-status" id="writeStatus">TRACE POUR VÉRIFIER</div>
       <div class="write-controls">
         <button class="flash-btn" id="btnPrev">← précédent</button>
-        <button class="btn-audio" id="btnWriteAudio">🔊 écouter</button>
+        <button class="btn-audio" id="btnWriteAudio">🔊 ECOUTER</button>
         <button class="flash-btn" id="btnClear">effacer</button>
         <button class="flash-btn" id="btnNext">suivant →</button>
       </div>
@@ -488,10 +491,24 @@ function renderEcriturePage() {
   document.getElementById('btnWriteAudio').addEventListener('click', () => speak(item.char));
   document.getElementById('btnClear').addEventListener('click', () => {
     const fg = document.getElementById('fgCanvas');
-    const ctx = fg.getContext('2d');
-    ctx.clearRect(0, 0, fg.width, fg.height);
+    fg.getContext('2d').clearRect(0, 0, fg.width, fg.height);
+    resetWriteFeedback();
   });
 }
+
+function resetWriteFeedback() {
+  const stack = document.getElementById('canvasStack');
+  const status = document.getElementById('writeStatus');
+  if (stack) stack.classList.remove('good', 'bad');
+  if (status) {
+    status.textContent = 'TRACE POUR VÉRIFIER';
+    status.className = 'write-status';
+  }
+}
+
+// Résolution de travail fixe pour la comparaison pixel par pixel (indépendante du DPR de l'écran)
+const SCORE_SIZE = 120;
+const SCORE_MIN_INK = 60; // px encrés minimum avant de juger le tracé
 
 function setupWriteCanvas(char) {
   const stack = document.getElementById('canvasStack');
@@ -513,6 +530,10 @@ function setupWriteCanvas(char) {
   const styles = getComputedStyle(document.getElementById('app'));
   const border = styles.getPropertyValue('--border').trim();
   const text = styles.getPropertyValue('--text').trim();
+  const accent = styles.getPropertyValue('--accent').trim();
+  const good = styles.getPropertyValue('--good').trim();
+  const bad = styles.getPropertyValue('--bad').trim();
+  const fontStack = '"PingFang SC", "Microsoft YaHei", "Heiti SC", sans-serif';
 
   bgCtx.strokeStyle = border;
   bgCtx.lineWidth = 1;
@@ -526,23 +547,105 @@ function setupWriteCanvas(char) {
 
   bgCtx.globalAlpha = 0.16;
   bgCtx.fillStyle = text;
-  bgCtx.font = `${size * 0.72}px "PingFang SC", "Microsoft YaHei", "Heiti SC", sans-serif`;
+  bgCtx.font = `${size * 0.72}px ${fontStack}`;
   bgCtx.textAlign = 'center';
   bgCtx.textBaseline = 'middle';
   bgCtx.fillText(char, size / 2, size / 2 + size * 0.03);
   bgCtx.globalAlpha = 1;
 
+  // --- masques de référence (hors-écran) pour noter le tracé ---
+  // 1) coreInk = le glyphe exact (sert de dénominateur pour la COUVERTURE :
+  //    combien du VRAI caractère a été recouvert).
+  // 2) toleranceInk = le glyphe épaissi par offsets (sert de zone tolérée pour la
+  //    PRÉCISION : une main qui ne suit pas le modèle au pixel près n'est pas pénalisée).
+  // Comparer la couverture au masque dilaté plutôt qu'au glyphe réel plafonnerait
+  // le score bien avant 100%, même pour un tracé parfait — d'où les deux masques.
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = SCORE_SIZE;
+  maskCanvas.height = SCORE_SIZE;
+  const maskCtx = maskCanvas.getContext('2d');
+  maskCtx.fillStyle = '#000';
+  maskCtx.font = `${SCORE_SIZE * 0.72}px ${fontStack}`;
+  maskCtx.textAlign = 'center';
+  maskCtx.textBaseline = 'middle';
+  const cx = SCORE_SIZE / 2, cy = SCORE_SIZE / 2 + SCORE_SIZE * 0.03;
+
+  maskCtx.fillText(char, cx, cy);
+  const coreData = maskCtx.getImageData(0, 0, SCORE_SIZE, SCORE_SIZE).data;
+  const coreInk = new Uint8Array(SCORE_SIZE * SCORE_SIZE);
+  let coreCount = 0;
+  for (let i = 0; i < SCORE_SIZE * SCORE_SIZE; i++) {
+    if (coreData[i * 4 + 3] > 128) { coreInk[i] = 1; coreCount++; }
+  }
+
+  const dilate = SCORE_SIZE * 0.09;
+  for (let a = 0; a < 8; a++) {
+    const angle = (a / 8) * Math.PI * 2;
+    maskCtx.fillText(char, cx + Math.cos(angle) * dilate, cy + Math.sin(angle) * dilate);
+  }
+  const toleranceData = maskCtx.getImageData(0, 0, SCORE_SIZE, SCORE_SIZE).data;
+  const toleranceInk = new Uint8Array(SCORE_SIZE * SCORE_SIZE);
+  for (let i = 0; i < SCORE_SIZE * SCORE_SIZE; i++) {
+    if (toleranceData[i * 4 + 3] > 128) toleranceInk[i] = 1;
+  }
+
   // --- premier plan : tracé de l'utilisateur ---
   const fgCtx = fg.getContext('2d');
   fgCtx.scale(dpr, dpr);
-  const accent = styles.getPropertyValue('--accent').trim();
   fgCtx.strokeStyle = accent;
-  fgCtx.lineWidth = 7;
+  // Épaisseur proche de celle des traits du glyphe modèle : un tracé même
+  // approximatif doit pouvoir recouvrir une bonne partie du caractère.
+  fgCtx.lineWidth = size * 0.045;
   fgCtx.lineCap = 'round';
   fgCtx.lineJoin = 'round';
 
+  const scoreCanvas = document.createElement('canvas');
+  scoreCanvas.width = SCORE_SIZE;
+  scoreCanvas.height = SCORE_SIZE;
+  const scoreCtx = scoreCanvas.getContext('2d');
+
+  function checkWriting() {
+    scoreCtx.clearRect(0, 0, SCORE_SIZE, SCORE_SIZE);
+    scoreCtx.drawImage(fg, 0, 0, fg.width, fg.height, 0, 0, SCORE_SIZE, SCORE_SIZE);
+    const drawnData = scoreCtx.getImageData(0, 0, SCORE_SIZE, SCORE_SIZE).data;
+
+    let drawnCount = 0, coreOverlap = 0, toleranceOverlap = 0;
+    for (let i = 0; i < SCORE_SIZE * SCORE_SIZE; i++) {
+      if (drawnData[i * 4 + 3] > 64) {
+        drawnCount++;
+        if (coreInk[i]) coreOverlap++;
+        if (toleranceInk[i]) toleranceOverlap++;
+      }
+    }
+
+    const status = document.getElementById('writeStatus');
+    if (!status) return; // page changée entre-temps
+    if (drawnCount < SCORE_MIN_INK) { resetWriteFeedback(); return; }
+
+    const coverage = coreCount ? coreOverlap / coreCount : 0;
+    const precision = drawnCount ? toleranceOverlap / drawnCount : 0;
+    // La couverture du caractère pèse plus lourd que la précision : la tolérance
+    // spatiale (glyphe gonflé) absorbe déjà l'imprécision du doigt/souris, donc
+    // ce qui doit vraiment être exigeant, c'est d'avoir tracé TOUT le caractère.
+    const score = coverage * 0.65 + precision * 0.35;
+    const isGood = score >= 0.75;
+
+    stack.classList.toggle('good', isGood);
+    stack.classList.toggle('bad', !isGood);
+    status.className = `write-status ${isGood ? 'good' : 'bad'}`;
+    status.textContent = isGood ? `✓ BIEN ÉCRIT (${Math.round(score * 100)}%)` : `✗ À RETRAVAILLER (${Math.round(score * 100)}%)`;
+
+    // recolore le tracé en vert/rouge pour un retour visuel immédiat
+    fgCtx.save();
+    fgCtx.globalCompositeOperation = 'source-atop';
+    fgCtx.fillStyle = isGood ? good : bad;
+    fgCtx.fillRect(0, 0, size, size);
+    fgCtx.restore();
+  }
+
   let drawing = false;
   let last = null;
+  let checkTimer = null;
 
   function pos(e) {
     const rect = fg.getBoundingClientRect();
@@ -552,6 +655,9 @@ function setupWriteCanvas(char) {
     drawing = true;
     last = pos(e);
     fg.setPointerCapture(e.pointerId);
+    clearTimeout(checkTimer);
+    // une nouvelle touche efface la teinte de correction précédente pour ce trait
+    fgCtx.strokeStyle = accent;
   }
   function move(e) {
     if (!drawing) return;
@@ -562,7 +668,13 @@ function setupWriteCanvas(char) {
     fgCtx.stroke();
     last = p;
   }
-  function end() { drawing = false; last = null; }
+  function end() {
+    if (!drawing) return;
+    drawing = false;
+    last = null;
+    clearTimeout(checkTimer);
+    checkTimer = setTimeout(checkWriting, 400);
+  }
 
   fg.addEventListener('pointerdown', start);
   fg.addEventListener('pointermove', move);
