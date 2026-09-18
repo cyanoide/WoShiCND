@@ -101,7 +101,13 @@ function applyTheme() {
   const bg = getComputedStyle(app).getPropertyValue('--bg').trim();
   document.documentElement.style.background = bg;
   document.body.style.background = bg;
+  // Safari semble ne lire la balise theme-color qu'au chargement initial pour
+  // certaines zones système, sans réagir à une mise à jour JS ultérieure —
+  // on la met à jour quand même (utile dans d'autres contextes/versions),
+  // mais les deux balises statiques media=prefers-color-scheme restent le
+  // filet de sécurité principal pour ce cas précis.
   document.getElementById('themeColorMeta').setAttribute('content', bg);
+  document.getElementById('themeColorMetaDark').setAttribute('content', bg);
 }
 
 document.getElementById('themeToggle').addEventListener('click', () => {
