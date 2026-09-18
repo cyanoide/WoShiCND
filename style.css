@@ -67,12 +67,14 @@
   box-sizing: border-box;
 }
 
-html, body, #app {
+/* #app (id, spécificité 100) écrasait silencieusement le height de .app (classe,
+   spécificité 10) plus bas — TOUS les fixes précédents sur .app étaient donc
+   sans effet, la règle qui s'appliquait vraiment était juste "height:100%" ici,
+   sans le fallback vh/dvh/-webkit-fill-available. #app est retiré de ce
+   sélecteur pour que .app soit la seule source de vérité sur sa taille. */
+html, body {
   width: 100%;
   height: 100%;
-  /* Fix classique du bug 100vh de Safari mobile (la barre d'adresse rétractable
-     fait varier la hauteur réelle du viewport sans que 100vh la reflète
-     toujours) : -webkit-fill-available cible la hauteur visible réelle. */
   height: -webkit-fill-available;
 }
 
