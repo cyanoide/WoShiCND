@@ -86,6 +86,10 @@ body {
   color: var(--text);
   position: relative;
   transition: background 0.6s ease, color 0.6s ease;
+  /* couvre la zone du home indicator en PWA installée sur iOS plutôt que de
+     laisser le fond du WebView (blanc) transparaître en dessous */
+  padding-bottom: env(safe-area-inset-bottom);
+  box-sizing: border-box;
 }
 
 .bg-grid {
@@ -520,12 +524,13 @@ body {
 /* --- Écriture (tracé) --- */
 .write-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .write-info {
-  display: flex; align-items: baseline; gap: 14px;
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 8px 14px;
   font-family: var(--font-mono); font-size: 12px; letter-spacing: 1px; color: var(--muted);
   text-transform: uppercase;
+  max-width: 100%;
 }
 .write-pinyin { font-family: var(--font-pinyin); color: var(--accent); font-size: 14px; }
-.write-meaning { color: var(--text); opacity: 0.8; }
+.write-meaning { color: var(--text); opacity: 0.8; max-width: 100%; text-align: center; }
 .write-emoji { font-size: 16px; }
 .canvas-stack {
   position: relative;

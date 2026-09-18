@@ -17,6 +17,7 @@ const state = {
   write: {
     scope: 'all',
     shuffled: false,
+    blind: false,
     pool: [],
     index: 0,
   },
@@ -58,6 +59,8 @@ const UI = {
   clear: { fr: 'effacer', en: 'clear' },
   shuffleOn: { fr: '🔀 aléatoire', en: '🔀 random' },
   shuffleOff: { fr: '↧ alphabétique', en: '↧ alphabetical' },
+  blindOn: { fr: '🙈 mode aveugle', en: '🙈 blind mode' },
+  blindOff: { fr: '👁 avec modèle', en: '👁 with template' },
   traceToCheck: { fr: 'TRACE POUR VÉRIFIER', en: 'TRACE TO CHECK' },
   wellWritten: { fr: 'BIEN ÉCRIT', en: 'WELL WRITTEN' },
   needsWork: { fr: 'À RETRAVAILLER', en: 'NEEDS WORK' },
@@ -82,6 +85,14 @@ function applyTheme() {
   document.getElementById('themeThumb').className = `theme-toggle-thumb ${state.theme}`;
   document.getElementById('themeLabel').textContent = state.theme === 'light' ? 'DAY' : 'NIGHT';
   localStorage.setItem('woshicnd-theme', state.theme);
+
+  // En PWA installée sur iOS, toute zone que #app ne couvre pas exactement
+  // (arrondi, barre du home indicator) laisse voir le fond par défaut du
+  // WebView — blanc. On force html/body à suivre la même couleur de fond.
+  const bg = getComputedStyle(app).getPropertyValue('--bg').trim();
+  document.documentElement.style.background = bg;
+  document.body.style.background = bg;
+  document.getElementById('themeColorMeta').setAttribute('content', bg);
 }
 
 document.getElementById('themeToggle').addEventListener('click', () => {
@@ -550,6 +561,7 @@ function renderEcriturePage() {
     <div class="write-wrap">
       <div class="flash-scope write-scope-row">
         <button class="flash-scope-btn shuffle-chip ${state.write.shuffled ? 'active' : ''}" id="btnShuffle">${state.write.shuffled ? t(UI.shuffleOn) : t(UI.shuffleOff)}</button>
+        <button class="flash-scope-btn shuffle-chip ${state.write.blind ? 'active' : ''}" id="btnBlind">${state.write.blind ? t(UI.blindOn) : t(UI.blindOff)}</button>
         ${scopeHtml}
       </div>
       ${item ? `
@@ -584,6 +596,10 @@ function renderEcriturePage() {
   document.getElementById('btnShuffle').addEventListener('click', () => {
     state.write.shuffled = !state.write.shuffled;
     rebuildWritePool();
+    renderContent();
+  });
+  document.getElementById('btnBlind').addEventListener('click', () => {
+    state.write.blind = !state.write.blind;
     renderContent();
   });
 
@@ -655,16 +671,19 @@ function setupWriteCanvas(char) {
   bgCtx.stroke();
   bgCtx.setLineDash([]);
 
+  // Mode aveugle : pas de fantôme, seulement la grille — on écrit de mémoire.
   // Le fantôme utilise la couleur d'accent (pas --text) : en thème sombre, un texte
   // gris clair à faible opacité sur fond noir devient quasi invisible, alors que
   // l'accent (jaune en dark, bleu en light) reste lisible dans les deux thèmes.
-  bgCtx.globalAlpha = 0.22;
-  bgCtx.fillStyle = accent;
-  bgCtx.font = `${size * 0.72}px ${fontStack}`;
-  bgCtx.textAlign = 'center';
-  bgCtx.textBaseline = 'middle';
-  bgCtx.fillText(char, size / 2, size / 2 + size * 0.03);
-  bgCtx.globalAlpha = 1;
+  if (!state.write.blind) {
+    bgCtx.globalAlpha = 0.22;
+    bgCtx.fillStyle = accent;
+    bgCtx.font = `${size * 0.72}px ${fontStack}`;
+    bgCtx.textAlign = 'center';
+    bgCtx.textBaseline = 'middle';
+    bgCtx.fillText(char, size / 2, size / 2 + size * 0.03);
+    bgCtx.globalAlpha = 1;
+  }
 
   // --- masques de référence (hors-écran) pour noter le tracé ---
   // 1) coreInk = le glyphe exact (sert de dénominateur pour la COUVERTURE :
