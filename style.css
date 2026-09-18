@@ -82,6 +82,14 @@ body {
   font-family: var(--font-main);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
+  overscroll-behavior: none;
+  /* overflow:hidden seul n'empêche pas toujours le rebond élastique (bounce)
+     d'iOS Safari, qui peut faire glisser toute la page et révéler le blanc
+     natif au-delà du document — exactement une barre en bas au retour du
+     rebond. position:fixed sur body bloque le scroll du document lui-même,
+     là où tout le défilement réel se fait dans .panel-right-inner. */
+  position: fixed;
+  inset: 0;
 }
 
 .app {
