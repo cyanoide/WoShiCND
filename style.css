@@ -533,6 +533,80 @@ body {
 .grammar-example-fr { font-size: 13px; color: var(--text); opacity: 0.8; margin-top: 2px; }
 .grammar-example-note { font-size: 11px; color: var(--muted); font-style: italic; margin-top: 4px; }
 
+/* --- Explorer (réseau de mots) --- */
+.orbit-toolbar { display: flex; justify-content: center; margin-bottom: 18px; }
+.orbit-wrap {
+  position: relative;
+  width: min(420px, 92vw);
+  height: min(420px, 92vw);
+  margin: 0 auto;
+}
+.orbit-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.orbit-line { stroke: var(--border); stroke-width: 1.5; }
+.orbit-line.leaf { stroke-dasharray: 3 4; opacity: 0.6; }
+
+.orbit-center {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: 132px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 14px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: var(--item-selected);
+  box-shadow: 0 0 20px var(--accent-glow);
+  text-align: center;
+  z-index: 2;
+}
+.orbit-emoji { font-size: 22px; }
+.orbit-hanzi { font-size: 30px; font-weight: 600; line-height: 1.1; }
+.orbit-pinyin { font-family: var(--font-pinyin); font-size: 13px; color: var(--accent); }
+.orbit-label {
+  font-size: 11px; color: var(--text); opacity: 0.85;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  max-width: 120px;
+}
+
+.orbit-satellite {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 78px;
+  padding: 8px 6px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: var(--bg-card);
+  text-align: center;
+  z-index: 1;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.orbit-satellite.navigable { cursor: pointer; }
+.orbit-satellite.navigable:hover, .orbit-satellite.navigable:active {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+.orbit-satellite.leaf { border-style: dashed; opacity: 0.7; cursor: help; }
+.orbit-sat-emoji { font-size: 15px; }
+.orbit-sat-char { font-size: 18px; font-weight: 600; line-height: 1; }
+.orbit-sat-pinyin { font-family: var(--font-pinyin); font-size: 10px; color: var(--muted); }
+.orbit-satellite.navigable .orbit-sat-pinyin { color: var(--accent); }
+
+@media (max-width: 768px) {
+  .orbit-wrap { width: min(320px, 88vw); height: min(320px, 88vw); }
+  .orbit-center { width: 104px; padding: 10px 8px; }
+  .orbit-hanzi { font-size: 24px; }
+  .orbit-label { font-size: 9px; max-width: 96px; }
+  .orbit-satellite { width: 62px; padding: 6px 4px; }
+  .orbit-sat-char { font-size: 15px; }
+}
+
 /* --- Écriture (tracé) --- */
 .write-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .write-info {

@@ -21,6 +21,10 @@ const state = {
     pool: [],
     index: 0,
   },
+  explorer: {
+    current: '火鸡', // point de départ par défaut : bien connecté (composants + usages)
+    history: [],
+  },
 };
 
 // Traduit un champ bilingue { fr, en } selon la langue courante.
@@ -64,6 +68,11 @@ const UI = {
   traceToCheck: { fr: 'TRACE POUR VÉRIFIER', en: 'TRACE TO CHECK' },
   wellWritten: { fr: 'BIEN ÉCRIT', en: 'WELL WRITTEN' },
   needsWork: { fr: 'À RETRAVAILLER', en: 'NEEDS WORK' },
+  explorerTitle: { fr: 'Explorer', en: 'Explore' },
+  explorerSub: { fr: 'TAPE UN MOT AUTOUR POUR LE RECENTRER', en: 'TAP A WORD AROUND IT TO RECENTER' },
+  explorerBack: { fr: '← retour', en: '← back' },
+  explorerDeadEnd: { fr: 'pas de fiche pour ce composant', en: 'no entry for this component' },
+  explore: { fr: 'explorer', en: 'explore' },
 };
 
 const PROGRESS_KEY = 'woshicnd-progress'; // { [id]: 'know' | 'retry' }
@@ -225,6 +234,7 @@ function renderWordCard(entry) {
       <div class="word-card-actions">
         <button class="btn-audio" data-speak="${entry.hanzi}">${t(UI.listen)}</button>
         ${entry.rad ? `<span class="word-radical-chip" data-radical="${entry.rad}">${t(UI.key)} ${entry.rad}</span>` : ''}
+        <span class="word-radical-chip" data-explore="${entry.hanzi}">🕸 ${t(UI.explore)}</span>
       </div>
       ${open ? renderBreakdown(entry) : ''}
     </div>
@@ -253,6 +263,16 @@ function wireWordGrid(container) {
       state.category = 'radicaux';
       state.selectedRadical = chip.dataset.radical;
       state.openCards.clear();
+      renderMenu();
+      renderContent();
+    });
+  });
+  container.querySelectorAll('[data-explore]').forEach(chip => {
+    chip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.category = 'explorer';
+      state.explorer.current = chip.dataset.explore;
+      state.explorer.history = [];
       renderMenu();
       renderContent();
     });
@@ -827,8 +847,131 @@ function setupWriteCanvas(char) {
   fg.addEventListener('pointercancel', end);
 }
 
+// ---------------- EXPLORER (réseau de mots, façon graphe) ----------------
+function findVocabByHanzi(key) { return VOCAB.find(v => v.hanzi === key); }
+
+// Résout une clé (caractère ou mot) vers une fiche navigable, si elle existe.
+function buildOrbitNode(key) {
+  const v = findVocabByHanzi(key);
+  if (v) return { key, hanzi: v.hanzi, pinyin: v.pinyin, label: v.gloss, emoji: emojiFor(v.hanzi), source: v };
+  const r = RADICALS[key];
+  if (r) return { key, hanzi: key, pinyin: r.pinyin, label: r.meaning, emoji: emojiFor(key) };
+  return null;
+}
+
+// Construit jusqu'à 8 mots liés : les composants du mot, les mots qui l'utilisent
+// comme composant, et les mots qui partagent le même radical.
+function getOrbitSatellites(centerKey) {
+  const results = [];
+  const seen = new Set([centerKey]);
+  const v = findVocabByHanzi(centerKey);
+
+  if (v && v.parts) {
+    v.parts.forEach(p => {
+      if (seen.has(p.char) || results.length >= 8) return;
+      results.push({ relation: 'component', char: p.char, pinyin: p.pinyin, meaning: p.meaning, node: buildOrbitNode(p.char) });
+      seen.add(p.char);
+    });
+  }
+
+  if (centerKey.length === 1) {
+    for (const entry of VOCAB) {
+      if (results.length >= 8) break;
+      if (entry.hanzi === centerKey || seen.has(entry.hanzi)) continue;
+      if (entry.parts && entry.parts.some(p => p.char === centerKey)) {
+        results.push({ relation: 'usedIn', char: entry.hanzi, pinyin: entry.pinyin, meaning: entry.gloss, node: buildOrbitNode(entry.hanzi) });
+        seen.add(entry.hanzi);
+      }
+    }
+  }
+
+  if (v && v.rad) {
+    for (const entry of VOCAB) {
+      if (results.length >= 8) break;
+      if (entry.hanzi === centerKey || seen.has(entry.hanzi)) continue;
+      if (entry.rad === v.rad) {
+        results.push({ relation: 'sibling', char: entry.hanzi, pinyin: entry.pinyin, meaning: entry.gloss, node: buildOrbitNode(entry.hanzi) });
+        seen.add(entry.hanzi);
+      }
+    }
+  }
+
+  return results;
+}
+
+function renderExplorerPage() {
+  const content = document.getElementById('content');
+  const center = buildOrbitNode(state.explorer.current) || buildOrbitNode(VOCAB[0].hanzi);
+  const satellites = getOrbitSatellites(center.key);
+  const em = center.emoji;
+
+  content.innerHTML = `
+    ${pageHeader(t(UI.explorerTitle), t(UI.explorerSub))}
+    <div class="orbit-toolbar">
+      <button class="flash-btn" id="btnOrbitBack" ${state.explorer.history.length ? '' : 'disabled'}>${t(UI.explorerBack)}</button>
+    </div>
+    <div class="orbit-wrap" id="orbitWrap">
+      <svg class="orbit-svg" id="orbitSvg"></svg>
+      <div class="orbit-center">
+        ${em ? `<div class="orbit-emoji">${em}</div>` : ''}
+        <div class="orbit-hanzi">${center.hanzi}</div>
+        <div class="orbit-pinyin">${center.pinyin}</div>
+        <div class="orbit-label">${t(center.label)}</div>
+        <button class="btn-audio" data-speak="${center.hanzi}">${t(UI.listen)}</button>
+      </div>
+      ${satellites.map((s, i) => `
+        <div class="orbit-satellite ${s.node ? 'navigable' : 'leaf'} rel-${s.relation}" data-index="${i}" ${s.node ? `data-key="${s.node.key}"` : ''} title="${t(s.meaning) || t(UI.explorerDeadEnd)}">
+          ${s.node && s.node.emoji ? `<span class="orbit-sat-emoji">${s.node.emoji}</span>` : ''}
+          <span class="orbit-sat-char">${s.char}</span>
+          <span class="orbit-sat-pinyin">${s.pinyin}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  positionOrbit(satellites.length);
+
+  document.getElementById('btnOrbitBack').addEventListener('click', () => {
+    const prev = state.explorer.history.pop();
+    if (prev) { state.explorer.current = prev; renderContent(); }
+  });
+  content.querySelectorAll('[data-speak]').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); speak(btn.dataset.speak); });
+  });
+  content.querySelectorAll('.orbit-satellite.navigable').forEach(el => {
+    el.addEventListener('click', () => {
+      state.explorer.history.push(state.explorer.current);
+      state.explorer.current = el.dataset.key;
+      renderContent();
+    });
+  });
+}
+
+function positionOrbit(count) {
+  const wrap = document.getElementById('orbitWrap');
+  const svg = document.getElementById('orbitSvg');
+  if (!wrap || count === 0) return;
+  const size = wrap.clientWidth;
+  const radius = size * 0.37;
+  const cx = size / 2, cy = size / 2;
+  svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+
+  const satellites = wrap.querySelectorAll('.orbit-satellite');
+  let lines = '';
+  satellites.forEach((el, i) => {
+    const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    lines += `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" class="orbit-line ${el.classList.contains('leaf') ? 'leaf' : ''}" />`;
+  });
+  svg.innerHTML = lines;
+}
+
 // ---------------- ROUTER ----------------
 function renderContent() {
+  if (state.category === 'explorer') return renderExplorerPage();
   if (state.category === 'radicaux') return renderRadicauxPage();
   if (state.category === 'revision') return renderRevisionPage();
   if (state.category === 'grammaire') return renderGrammarPage();

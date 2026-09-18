@@ -40,6 +40,7 @@ const CATEGORIES = [
   { id: 'phrases', label: { fr: 'Phrases', en: 'Phrases' }, sub: { fr: '日常用语 · PAR DOMAINE', en: '日常用语 · BY TOPIC' } },
   { id: 'grammaire', label: { fr: 'Grammaire', en: 'Grammar' }, sub: { fr: 'PIÈGES & CONNECTEURS', en: 'TRAPS & CONNECTORS' } },
   { id: 'ecriture', label: { fr: 'Écriture', en: 'Writing' }, sub: { fr: '写字 · TRACÉ AU DOIGT', en: '写字 · TRACE WITH YOUR FINGER' } },
+  { id: 'explorer', label: { fr: 'Explorer', en: 'Explore' }, sub: { fr: 'RÉSEAU DE MOTS', en: 'WORD NETWORK' } },
   { id: 'radicaux', label: { fr: 'Radicaux', en: 'Radicals' }, sub: { fr: 'VUE CROISÉE', en: 'CROSS-REFERENCE' } },
   { id: 'revision', label: { fr: 'Révision', en: 'Review' }, sub: { fr: 'FLASHCARDS', en: 'FLASHCARDS' } },
 ];
