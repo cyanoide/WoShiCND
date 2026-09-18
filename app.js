@@ -52,6 +52,9 @@ const UI = {
   characters: { fr: 'CARACTÈRES', en: 'CHARACTERS' },
   prev: { fr: '← précédent', en: '← previous' },
   next: { fr: 'suivant →', en: 'next →' },
+  prevLabel: { fr: 'précédent', en: 'previous' },
+  nextLabel: { fr: 'suivant', en: 'next' },
+  listenLabel: { fr: 'ECOUTER', en: 'LISTEN' },
   clear: { fr: 'effacer', en: 'clear' },
   shuffleOn: { fr: '🔀 aléatoire', en: '🔀 random' },
   shuffleOff: { fr: '↧ alphabétique', en: '↧ alphabetical' },
@@ -562,10 +565,10 @@ function renderEcriturePage() {
       </div>
       <div class="write-status" id="writeStatus">${t(UI.traceToCheck)}</div>
       <div class="write-controls">
-        <button class="flash-btn" id="btnPrev">${t(UI.prev)}</button>
-        <button class="btn-audio" id="btnWriteAudio">${t(UI.listen)}</button>
-        <button class="flash-btn" id="btnClear">${t(UI.clear)}</button>
-        <button class="flash-btn" id="btnNext">${t(UI.next)}</button>
+        <button class="flash-btn" id="btnPrev">← <span class="btn-label">${t(UI.prevLabel)}</span></button>
+        <button class="btn-audio" id="btnWriteAudio">🔊 <span class="btn-label">${t(UI.listenLabel)}</span></button>
+        <button class="flash-btn" id="btnClear">🗑 <span class="btn-label">${t(UI.clear)}</span></button>
+        <button class="flash-btn" id="btnNext"><span class="btn-label">${t(UI.nextLabel)}</span> →</button>
       </div>
       ` : `<div class="flash-empty">${t(UI.noWordsCategory)}</div>`}
     </div>

@@ -721,5 +721,6 @@ body {
   .canvas-stack { width: min(200px, 50vw); height: min(200px, 50vw); }
   .write-status { font-size: 10px; min-height: 13px; }
   .write-controls { gap: 6px; }
-  .write-controls .flash-btn, .write-controls .btn-audio { padding: 6px 8px; font-size: 10px; }
+  .write-controls .flash-btn, .write-controls .btn-audio { padding: 8px 12px; font-size: 13px; }
+  .write-controls .btn-label { display: none; }
 }
