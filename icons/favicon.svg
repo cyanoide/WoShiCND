@@ -1,3 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <text x="256" y="268" font-size="440" text-anchor="middle" dominant-baseline="central">🏮</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 503 510">
+  <defs>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
+      <feFlood flood-color="#FFD24C" flood-opacity="0.65" result="color"/>
+      <feComposite in="color" in2="blur" operator="in" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g filter="url(#glow)" fill="#DE2910">
+    <path d="M 251,289 L 193,390 251,493 309,392 Z"/>
+    <path d="M 301,253 L 378,339 492,316 415,229 Z"/>
+    <path d="M 10,316 L 124,339 202,253 87,229 Z"/>
+    <path d="M 251,140 L 227,207 161,207 216,249 194,315 250,275 307,315 286,249 342,207 275,207 Z"/>
+    <path d="M 401,29 L 294,77 282,194 388,146 Z"/>
+    <path d="M 102,29 L 114,146 220,194 208,76 Z"/>
+  </g>
 </svg>
