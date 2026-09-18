@@ -93,7 +93,6 @@ body {
   background: var(--bg);
   color: var(--text);
   transition: background 0.6s ease, color 0.6s ease;
-  padding-bottom: env(safe-area-inset-bottom);
   box-sizing: border-box;
 }
 
