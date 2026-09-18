@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <title>WOSHICND</title>
+  <meta name="description" content="Terminal d'apprentissage du mandarin — décomposition des caractères, radicaux partagés, logique des mots composés." />
+
+  <!-- PWA / Add to Home Screen (Safari iOS) -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#f5f5f0" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="WOSHICND" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app light" id="app" data-theme="light">
+    <div class="bg-grid"></div>
+
+    <button class="theme-toggle" id="themeToggle" aria-label="Changer de thème" title="Jour / Nuit">
+      <span class="theme-toggle-track">
+        <span class="theme-toggle-thumb light" id="themeThumb">☀</span>
+      </span>
+      <span class="theme-toggle-label" id="themeLabel">DAY</span>
+    </button>
+
+    <div class="layout">
+      <aside class="panel-left">
+        <nav class="menu">
+          <div class="menu-header">
+            <div class="menu-title-line"></div>
+            <h1 class="menu-title" id="menuTitle">我是CND<span class="cursor-blink">_</span></h1>
+            <div class="menu-subtitle">WǑ SHÌ CND · MANDARIN TERMINAL</div>
+            <div class="menu-title-line"></div>
+          </div>
+
+          <div class="menu-decorator">
+            <span class="decorator-bracket">[</span>
+            <span class="decorator-dots">● ● ● ○ ○ ○</span>
+            <span class="decorator-bracket">]</span>
+          </div>
+
+          <ul class="menu-list" id="menuList"></ul>
+
+          <div class="menu-footer">
+            <div class="menu-title-line"></div>
+            <div class="menu-footer-text" id="wordCount">— MOTS CHARGÉS</div>
+            <div class="menu-footer-text">SYS.VER 1.0 — WOSHICND</div>
+          </div>
+        </nav>
+      </aside>
+
+      <main class="panel-right">
+        <div class="panel-right-inner" id="content"></div>
+      </main>
+    </div>
+
+    <div class="overlay-scanlines"></div>
+    <canvas class="overlay-noise" id="noiseCanvas"></canvas>
+    <div class="overlay-vignette"></div>
+    <div class="overlay-glitch-line"></div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
