@@ -521,7 +521,18 @@ function buildCharacterPool(scope) {
   vocabPool.forEach(v => {
     (v.parts || []).forEach(p => {
       if (p.char.length === 1 && isHanzi(p.char) && !map.has(p.char)) {
-        map.set(p.char, { pinyin: p.pinyin, meaning: p.meaning });
+        // Ce caractère n'a pas de sens autonome (ex. 菠 n'existe que dans 菠萝) :
+        // on montre le mot réel où il apparaît plutôt que juste sa composition,
+        // sinon "菠" affiche seulement "艹(plante) + 波(son)" sans répondre à
+        // "qu'est-ce que ça veut dire".
+        map.set(p.char, {
+          pinyin: p.pinyin,
+          meaning: p.meaning,
+          context: {
+            fr: `dans ${v.hanzi} (${v.pinyin}) : ${v.gloss.fr}`,
+            en: `in ${v.hanzi} (${v.pinyin}): ${v.gloss.en}`,
+          },
+        });
       }
     });
   });
@@ -569,8 +580,9 @@ function renderEcriturePage() {
         <span class="write-progress">${state.write.index + 1} / ${pool.length}</span>
         ${em ? `<span class="write-emoji">${em}</span>` : ''}
         <span class="write-pinyin">${item.pinyin}</span>
-        <span class="write-meaning">${t(item.meaning)}</span>
+        <span class="write-meaning">${t(item.context || item.meaning)}</span>
       </div>
+      ${item.context ? `<div class="write-meaning-sub">${t(item.meaning)}</div>` : ''}
       <div class="canvas-stack" id="canvasStack">
         <canvas id="bgCanvas"></canvas>
         <canvas id="fgCanvas"></canvas>

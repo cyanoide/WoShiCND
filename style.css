@@ -532,6 +532,15 @@ body {
 }
 .write-pinyin { font-family: var(--font-pinyin); color: var(--accent); font-size: 14px; }
 .write-meaning { color: var(--text); opacity: 0.8; max-width: 100%; text-align: center; }
+.write-meaning-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  text-align: center;
+  max-width: 90%;
+  margin-top: -8px;
+}
 .write-emoji { font-size: 16px; }
 .canvas-stack {
   position: relative;
@@ -700,13 +709,18 @@ body {
 
 /* --- Responsive --- */
 @media (max-width: 768px) {
+  /* flex-basis en % du parent (.layout, height:100% de .app) plutôt qu'en vh :
+     sur iOS en PWA standalone, vh ne correspond pas toujours exactement à la
+     fenêtre réelle, et 40vh+60vh pouvait tomber un peu court, laissant un vide
+     (fond blanc du WebView) sous le contenu. Le % reste toujours exact. */
   .layout { flex-direction: column; }
   .panel-left {
-    width: 100%; min-width: unset; height: auto; max-height: 40vh;
+    width: 100%; min-width: unset; height: 40%; max-height: 40%; flex-shrink: 0;
     border-right: none; border-bottom: 1px solid var(--border);
     padding: 56px 16px 14px 18px;
+    overflow-y: auto;
   }
-  .panel-right { height: 60vh; }
+  .panel-right { height: 60%; flex: 1; }
   .panel-right-inner { padding: 16px 16px 20px; }
   .menu-title { font-size: 20px; letter-spacing: 3px; }
   .menu-item { padding: 7px 10px; font-size: 13px; }
