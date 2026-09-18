@@ -914,20 +914,23 @@ function renderExplorerPage() {
         <div class="orbit-hanzi">${center.hanzi}</div>
         <div class="orbit-pinyin">${center.pinyin}</div>
         <div class="orbit-label">${t(center.label)}</div>
-        <button class="btn-audio" data-speak="${center.hanzi}">${t(UI.listen)}</button>
       </div>
       ${satellites.map((s, i) => {
         const delay = -(i / satellites.length) * ORBIT_DURATION;
+        const satEmoji = (s.node && s.node.emoji) || emojiFor(s.char);
         return `
         <div class="orbit-track" style="animation-duration:${ORBIT_DURATION}s; animation-delay:${delay}s;">
           <div class="orbit-satellite ${s.node ? 'navigable' : 'leaf'} rel-${s.relation}" style="animation-duration:${ORBIT_DURATION}s; animation-delay:${delay}s;" ${s.node ? `data-key="${s.node.key}"` : ''} title="${t(s.meaning) || t(UI.explorerDeadEnd)}">
-            <span class="orbit-sat-dot"></span>
+            ${satEmoji ? `<span class="orbit-sat-emoji">${satEmoji}</span>` : `<span class="orbit-sat-dot"></span>`}
             <span class="orbit-sat-char">${s.char}</span>
             <span class="orbit-sat-pinyin">${s.pinyin}</span>
           </div>
         </div>
       `;
       }).join('')}
+    </div>
+    <div class="orbit-audio-row">
+      <button class="btn-audio orbit-audio" data-speak="${center.hanzi}">🔊 <span class="btn-label">${t(UI.listenLabel)}</span></button>
     </div>
   `;
 
@@ -954,7 +957,7 @@ function renderExplorerPage() {
 function sizeOrbit() {
   const wrap = document.getElementById('orbitWrap');
   if (!wrap) return;
-  const radius = wrap.clientWidth * 0.33;
+  const radius = wrap.clientWidth * 0.36;
   wrap.querySelectorAll('.orbit-track').forEach(track => {
     track.style.setProperty('--r', radius + 'px');
   });
