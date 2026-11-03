@@ -73,6 +73,25 @@ const UI = {
   explorerBack: { fr: '← retour', en: '← back' },
   explorerDeadEnd: { fr: 'pas de fiche pour ce composant', en: 'no entry for this component' },
   explore: { fr: 'explorer', en: 'explore' },
+  explorerSearch: { fr: '汉字 · pinyin · français · English', en: '汉字 · pinyin · English' },
+  dictLoading: { fr: 'chargement du dictionnaire…', en: 'loading dictionary…' },
+  dictError: { fr: 'dictionnaire indisponible (connexion ?)', en: 'dictionary unavailable (offline?)' },
+  noResults: { fr: 'aucun résultat', en: 'no results' },
+  secDefinition: { fr: 'DÉFINITION', en: 'DEFINITION' },
+  secComposition: { fr: 'COMPOSITION', en: 'COMPOSITION' },
+  secRadical: { fr: 'RADICAL', en: 'RADICAL' },
+  secFamily: { fr: 'FAMILLE DU RADICAL', en: 'RADICAL FAMILY' },
+  secWordsWith: { fr: 'MOTS AVEC', en: 'WORDS WITH' },
+  etymPhonetic: { fr: 'phono-sémantique', en: 'phonetic compound' },
+  etymIdeographic: { fr: 'idéogramme composé', en: 'ideographic compound' },
+  etymPictographic: { fr: 'pictogramme', en: 'pictograph' },
+  etymSense: { fr: 'sens', en: 'meaning' },
+  etymSound: { fr: 'son', en: 'sound' },
+  legendSense: { fr: 'sens', en: 'meaning' },
+  legendSound: { fr: 'son', en: 'sound' },
+  legendRadical: { fr: 'radical', en: 'radical' },
+  legendWord: { fr: 'mot', en: 'word' },
+  dictSources: { fr: 'Dictionnaire : CC-CEDICT (CC BY-SA 4.0) · Décomposition : Make Me a Hanzi (LGPL 3.0)', en: 'Dictionary: CC-CEDICT (CC BY-SA 4.0) · Decomposition: Make Me a Hanzi (LGPL 3.0)' },
 };
 
 const PROGRESS_KEY = 'woshicnd-progress'; // { [id]: 'know' | 'retry' }
@@ -853,63 +872,251 @@ function setupWriteCanvas(char) {
   fg.addEventListener('pointercancel', end);
 }
 
-// ---------------- EXPLORER (réseau de mots, façon graphe) ----------------
+// ---------------- EXPLORER (dictionnaire + réseau de mots, façon graphe) ----------------
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function findVocabByHanzi(key) { return VOCAB.find(v => v.hanzi === key); }
 
-// Résout une clé (caractère ou mot) vers une fiche navigable, si elle existe.
-function buildOrbitNode(key) {
+const firstReading = (p) => (p || '').split(' / ')[0];
+// Libellé venant du dictionnaire : anglais seulement, même en mode FR pour l'instant.
+const enLabel = (text) => ({ fr: text, en: text, enOnly: true });
+const shortLabel = (text) => {
+  const first = String(text).split(';')[0].trim();
+  return first.length > 36 ? first.slice(0, 34) + '…' : first;
+};
+
+// Résout une clé (caractère ou mot) vers une fiche : d'abord le vocabulaire
+// curé (traductions FR), puis le dictionnaire complet.
+function resolveNode(key) {
   const v = findVocabByHanzi(key);
-  if (v) return { key, hanzi: v.hanzi, pinyin: v.pinyin, label: v.gloss, emoji: emojiFor(v.hanzi), source: v };
-  const r = RADICALS[key];
-  if (r) return { key, hanzi: key, pinyin: r.pinyin, label: r.meaning, emoji: emojiFor(key) };
+  const rec = Dict.ready() ? Dict.char(key) : null;
+  if (v) return { key, kind: 'vocab', hanzi: v.hanzi, pinyin: v.pinyin, label: v.gloss, emoji: emojiFor(v.hanzi), vocab: v, rec };
+  if (key.length === 1) {
+    const cur = RADICALS[key];
+    if (cur) return { key, kind: 'char', hanzi: key, pinyin: cur.pinyin, label: cur.meaning, emoji: emojiFor(key), rec };
+    if (rec) return { key, kind: 'char', hanzi: key, pinyin: firstReading(rec.p), label: enLabel(rec.d || ''), emoji: emojiFor(key), rec };
+    return null;
+  }
+  if (Dict.ready()) {
+    const entries = Dict.word(key);
+    if (entries) return { key, kind: 'word', hanzi: key, pinyin: entries[0][2], label: enLabel(entries[0][3]), emoji: emojiFor(key), entries };
+  }
   return null;
 }
 
-// Construit jusqu'à 8 mots liés : les composants du mot, les mots qui l'utilisent
-// comme composant, et les mots qui partagent le même radical.
-function getOrbitSatellites(centerKey) {
+// Jusqu'à 8 mots liés autour du centre : ses composants (avec leur rôle :
+// son / sens), son radical, puis les mots qui l'utilisent. Pas de lien "même
+// radical" entre frères : la famille d'un radical a sa propre section dessous.
+function getOrbitSatellites(center) {
   const results = [];
-  const seen = new Set([centerKey]);
-  const v = findVocabByHanzi(centerKey);
+  const seen = new Set([center.key]);
+  const MAX = 8;
+  const add = (relation, ch, pinyin, meaning, role) => {
+    if (seen.has(ch) || results.length >= MAX) return;
+    seen.add(ch);
+    results.push({ relation, role, char: ch, pinyin, meaning, node: resolveNode(ch) });
+  };
+  const roleOfTag = (tag) => (tag === 'son' ? 'sound' : tag === 'mot' ? 'word' : 'sense');
 
-  if (v && v.parts) {
-    v.parts.forEach(p => {
-      if (seen.has(p.char) || results.length >= 8) return;
-      results.push({ relation: 'component', char: p.char, pinyin: p.pinyin, meaning: p.meaning, node: buildOrbitNode(p.char) });
-      seen.add(p.char);
+  if (center.vocab && center.vocab.parts) {
+    center.vocab.parts.forEach(p => add('component', p.char, p.pinyin, p.meaning, roleOfTag(p.tag)));
+  }
+
+  if (center.kind === 'word') {
+    const syl = center.pinyin.split(' ');
+    [...center.key].forEach((ch, i) => {
+      const r = Dict.char(ch);
+      add('component', ch, syl.length === center.key.length ? syl[i] : firstReading(r && r.p), enLabel(r ? r.d || '' : ''), 'word');
     });
   }
 
-  if (centerKey.length === 1) {
-    for (const entry of VOCAB) {
-      if (results.length >= 8) break;
-      if (entry.hanzi === centerKey || seen.has(entry.hanzi)) continue;
-      if (entry.parts && entry.parts.some(p => p.char === centerKey)) {
-        results.push({ relation: 'usedIn', char: entry.hanzi, pinyin: entry.pinyin, meaning: entry.gloss, node: buildOrbitNode(entry.hanzi) });
-        seen.add(entry.hanzi);
+  const rec = center.rec;
+  if (center.key.length === 1 && rec) {
+    (rec.c || []).filter(c => c !== center.key).slice(0, 4).forEach(c => {
+      const cr = Dict.char(c);
+      const role = c === rec.ph ? 'sound' : c === rec.se ? 'sense' : 'part';
+      add('component', c, firstReading(cr && cr.p), enLabel(cr ? cr.d || '' : ''), role);
+    });
+    const canon = Dict.canonical(rec.r || center.key);
+    const radMeaning = (ch) => { const r = Dict.char(ch); return (RADICALS[ch] && RADICALS[ch].meaning) || enLabel(r ? r.d || '' : ''); };
+    const radPinyin = (ch) => { const r = Dict.char(ch); return firstReading(r && r.p); };
+    if (rec.r && rec.r !== center.key) add('radical', rec.r, radPinyin(rec.r), radMeaning(rec.r), 'radical');
+    // un radical (ou sa forme réduite) montre sa variante et quelques-uns de ses caractères
+    if (center.key === canon || Dict.canonical(center.key) === canon) {
+      if (center.key !== canon) add('radical', canon, radPinyin(canon), radMeaning(canon), 'radical');
+      Dict.variants(canon).forEach(v => add('radical', v, radPinyin(v), radMeaning(v), 'radical'));
+      let n = 0;
+      for (const c of Dict.family(canon, 12)) {
+        if (n >= 3) break;
+        if (seen.has(c)) continue;
+        const cr = Dict.char(c);
+        add('family', c, firstReading(cr && cr.p), enLabel(cr ? cr.d || '' : ''), 'sense');
+        n++;
       }
     }
   }
 
-  // Pas de lien "même radical" : deux mots qui partagent juste 鸟 (ex. 鸭 et 鸡)
-  // n'ont pas de vrai rapport de composition entre eux — ça encombrait le
-  // graphe de liens artificiels. Un mot ne relie que ce qui le compose
-  // vraiment, et ce qu'il compose ailleurs. Pour "tous les mots avec 鸟",
-  // la page Radicaux reste l'outil dédié.
-
+  if (center.key.length === 1) {
+    let curated = 0;
+    for (const entry of VOCAB) {
+      if (curated >= 3 || results.length >= MAX) break;
+      if (entry.hanzi === center.key || seen.has(entry.hanzi)) continue;
+      if (entry.parts && entry.parts.some(p => p.char === center.key)) {
+        add('usedIn', entry.hanzi, entry.pinyin, entry.gloss, 'word');
+        curated++;
+      }
+    }
+    if (Dict.ready()) {
+      Dict.wordsWith(center.key, 14).forEach(w => add('usedIn', w[0], w[2], enLabel(w[3]), 'word'));
+    }
+  }
   return results;
+}
+
+const chipHtml = (ch, sub) => {
+  const rec = Dict.ready() ? Dict.char(ch) : null;
+  const py = rec ? firstReading(rec.p) : '';
+  return `<button class="dict-chip" data-key="${esc(ch)}"><span class="dict-chip-char">${esc(ch)}</span>${py ? `<span class="dict-chip-py">${esc(py)}</span>` : ''}${sub ? `<span class="dict-chip-sub">${esc(sub)}</span>` : ''}</button>`;
+};
+const rowHtml = (w) => `<button class="dict-row" data-key="${esc(w[0])}"><span class="dict-row-hanzi">${esc(w[0])}${w[1] ? `<small>${esc(w[1])}</small>` : ''}</span><span class="dict-row-py">${esc(w[2])}</span><span class="dict-row-gloss">${esc(w[3])}</span></button>`;
+
+function renderExplorerDetails(center) {
+  if (!Dict.ready()) {
+    return `<div class="dict-note">${esc(state.explorer.dictError ? t(UI.dictError) : t(UI.dictLoading))}</div>`;
+  }
+  const rec = center.rec;
+  const sections = [];
+
+  // Définition(s)
+  const defLines = [];
+  if (center.kind === 'word') {
+    center.entries.forEach(w => defLines.push(`<div class="dict-def-line"><span class="dict-def-py">${esc(w[2])}</span> ${esc(w[3])}</div>`));
+  } else {
+    if (rec && rec.d) defLines.push(`<div class="dict-def-line">${esc(rec.d)}</div>`);
+    (Dict.word(center.key) || []).slice(0, 2).forEach(w => defLines.push(`<div class="dict-def-line"><span class="dict-def-py">${esc(w[2])}</span> ${esc(w[3])}</div>`));
+  }
+  if (defLines.length) sections.push(`<section class="dict-sec"><h3>${esc(t(UI.secDefinition))}<span class="dict-en">EN</span></h3>${defLines.join('')}</section>`);
+
+  // Composition / étymologie
+  if (center.key.length > 1) {
+    sections.push(`<section class="dict-sec"><h3>${esc(t(UI.secComposition))}</h3><div class="dict-chips">${[...new Set([...center.key])].map(c => chipHtml(c)).join('')}</div></section>`);
+  } else if (rec && (rec.t || rec.c)) {
+    let etym = '';
+    if (rec.t === 'p' && rec.ph && rec.se) {
+      etym = `<div class="dict-etym"><b>${esc(t(UI.etymPhonetic))}</b> — ${esc(t(UI.etymSense))} ${chipHtml(rec.se, rec.h)} + ${esc(t(UI.etymSound))} ${chipHtml(rec.ph)}</div>`;
+    } else if (rec.t === 'i') {
+      etym = `<div class="dict-etym"><b>${esc(t(UI.etymIdeographic))}</b>${rec.h ? ` — ${esc(rec.h)}` : ''}</div>`;
+    } else if (rec.t === 'g') {
+      etym = `<div class="dict-etym"><b>${esc(t(UI.etymPictographic))}</b>${rec.h ? ` — ${esc(rec.h)}` : ''}</div>`;
+    }
+    const comps = (rec.c || []).filter(c => c !== center.key);
+    if (etym || comps.length) {
+      sections.push(`<section class="dict-sec"><h3>${esc(t(UI.secComposition))}</h3>${etym}${comps.length ? `<div class="dict-chips">${comps.map(c => chipHtml(c)).join('')}</div>` : ''}</section>`);
+    }
+  }
+
+  // Radical + famille
+  const rad = center.key.length === 1 ? Dict.canonical((rec && rec.r) || center.key) : null;
+  if (rad && Dict.familySize(rad) > 0) {
+    const meaningOf = (ch) => { const rr = Dict.char(ch); const m = RADICALS[ch] ? t(RADICALS[ch].meaning) : (rr && rr.d) || ''; return m ? shortLabel(m) : ''; };
+    const forms = [...new Set([rec && rec.r, rad, ...Dict.variants(rad)].filter(Boolean))].filter(f => f !== center.key);
+    const size = Dict.familySize(rad);
+    sections.push(`<section class="dict-sec"><h3>${esc(t(UI.secRadical))}</h3><div class="dict-chips">${forms.map(f => chipHtml(f, meaningOf(f))).join('')}</div></section>`);
+    if (size > 1) {
+      sections.push(`<section class="dict-sec"><h3>${esc(t(UI.secFamily))} ${esc(rad)} · ${size}</h3><div class="dict-chips">${Dict.family(rad, 60).filter(c => c !== center.key).map(c => chipHtml(c)).join('')}</div></section>`);
+    }
+  }
+
+  // Mots liés
+  const base = center.key.length > 1 ? [...new Set([...center.key])].slice(0, 2) : [center.key];
+  base.forEach(ch => {
+    const list = Dict.wordsWith(ch, 24).filter(w => w[0] !== center.key);
+    if (list.length) sections.push(`<section class="dict-sec"><h3>${esc(t(UI.secWordsWith))} ${esc(ch)}</h3><div class="dict-rows">${list.map(rowHtml).join('')}</div></section>`);
+  });
+
+  sections.push(`<div class="dict-credit">${esc(t(UI.dictSources))}</div>`);
+  return sections.join('');
+}
+
+function navigateExplorer(key) {
+  if (key !== state.explorer.current) state.explorer.history.push(state.explorer.current);
+  state.explorer.current = key;
+  renderContent();
+  const inner = document.getElementById('content');
+  if (inner) inner.scrollTop = 0;
+}
+
+// Recherche : vocabulaire curé (FR/EN) d'abord, puis le dictionnaire complet
+function runExplorerSearch(query) {
+  const box = document.getElementById('orbitSearchResults');
+  if (!box) return;
+  const q = query.trim();
+  if (!q) { box.innerHTML = ''; return; }
+  if (!Dict.ready()) { box.innerHTML = `<div class="dict-note">${esc(t(state.explorer.dictError ? UI.dictError : UI.dictLoading))}</div>`; return; }
+
+  const lq = q.toLowerCase();
+  const nq = lq.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, '');
+  const rows = [];
+  const seen = new Set();
+
+  VOCAB.forEach(v => {
+    if (rows.length >= 5 || seen.has(v.hanzi)) return;
+    const py = v.pinyin.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z]/g, '');
+    const hit = v.hanzi.includes(q) ||
+      (nq.length >= 2 && py.startsWith(nq)) ||
+      (lq.length >= 2 && (v.gloss.fr.toLowerCase().includes(lq) || v.gloss.en.toLowerCase().includes(lq)));
+    if (hit) { seen.add(v.hanzi); rows.push({ key: v.hanzi, hanzi: v.hanzi, pinyin: v.pinyin, gloss: t(v.gloss), curated: true }); }
+  });
+
+  Dict.search(q, 14).forEach(r => {
+    if (seen.has(r.key)) return;
+    seen.add(r.key);
+    if (r.type === 'char') {
+      const c = Dict.char(r.key);
+      rows.push({ key: r.key, hanzi: r.key, pinyin: firstReading(c && c.p), gloss: (c && c.d) || '' });
+    } else {
+      rows.push({ key: r.key, hanzi: r.key, trad: r.word[1], pinyin: r.word[2], gloss: r.word[3] });
+    }
+  });
+
+  box.innerHTML = rows.length
+    ? rows.map(r => `<button class="dict-row${r.curated ? ' curated' : ''}" data-key="${esc(r.key)}"><span class="dict-row-hanzi">${esc(r.hanzi)}${r.trad ? `<small>${esc(r.trad)}</small>` : ''}</span><span class="dict-row-py">${esc(r.pinyin)}</span><span class="dict-row-gloss">${esc(r.gloss)}</span></button>`).join('')
+    : `<div class="dict-note">${esc(t(UI.noResults))}</div>`;
+  box.querySelectorAll('[data-key]').forEach(el => el.addEventListener('click', () => navigateExplorer(el.dataset.key)));
+}
+
+function onDictLoaded() {
+  if (state.category !== 'explorer') return;
+  const inp = document.getElementById('orbitSearch');
+  if (inp && inp.value.trim()) { runExplorerSearch(inp.value); renderDetailsOnly(); }
+  else renderContent();
+}
+
+// Remplit la zone de détails sans recréer la page (pour ne pas casser la saisie)
+function renderDetailsOnly() {
+  const box = document.getElementById('explorerDetails');
+  const center = resolveNode(state.explorer.current) || resolveNode('火鸡');
+  if (box && center) box.innerHTML = renderExplorerDetails(center);
+  document.querySelectorAll('#explorerDetails [data-key]').forEach(el => el.addEventListener('click', () => navigateExplorer(el.dataset.key)));
 }
 
 function renderExplorerPage() {
   const content = document.getElementById('content');
-  const center = buildOrbitNode(state.explorer.current) || buildOrbitNode(VOCAB[0].hanzi);
-  const satellites = getOrbitSatellites(center.key);
+  const center = resolveNode(state.explorer.current) || resolveNode('火鸡');
+  const satellites = getOrbitSatellites(center);
   const em = center.emoji;
+  const centerLabel = center.label.enOnly ? shortLabel(t(center.label)) : t(center.label);
 
   const ORBIT_DURATION = 50; // secondes pour un tour complet — lent et calme
 
   content.innerHTML = `
     ${pageHeader(t(UI.explorerTitle), t(UI.explorerSub))}
+    <div class="orbit-search">
+      <input id="orbitSearch" type="search" inputmode="search" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${esc(t(UI.explorerSearch))}">
+      <div class="orbit-search-results" id="orbitSearchResults"></div>
+    </div>
     <div class="orbit-toolbar">
       <button class="flash-btn" id="btnOrbitBack" ${state.explorer.history.length ? '' : 'disabled'}>${t(UI.explorerBack)}</button>
     </div>
@@ -917,30 +1124,45 @@ function renderExplorerPage() {
       <div class="orbit-ring"></div>
       <div class="orbit-center">
         ${em ? `<div class="orbit-emoji">${em}</div>` : ''}
-        <div class="orbit-hanzi">${center.hanzi}</div>
-        <div class="orbit-pinyin">${center.pinyin}</div>
-        <div class="orbit-label">${t(center.label)}</div>
+        <div class="orbit-hanzi">${esc(center.hanzi)}</div>
+        <div class="orbit-pinyin">${esc(center.pinyin)}</div>
+        <div class="orbit-label">${esc(centerLabel)}</div>
       </div>
       ${satellites.map((s, i) => {
         const delay = -(i / satellites.length) * ORBIT_DURATION;
         const satEmoji = (s.node && s.node.emoji) || emojiFor(s.char);
+        const tip = s.meaning ? (s.meaning.enOnly ? shortLabel(t(s.meaning)) : t(s.meaning)) : '';
         return `
         <div class="orbit-track" style="animation-duration:${ORBIT_DURATION}s; animation-delay:${delay}s;">
-          <div class="orbit-satellite ${s.node ? 'navigable' : 'leaf'} rel-${s.relation}" style="animation-duration:${ORBIT_DURATION}s; animation-delay:${delay}s;" ${s.node ? `data-key="${s.node.key}"` : ''} title="${t(s.meaning) || t(UI.explorerDeadEnd)}">
+          <div class="orbit-satellite ${s.node ? 'navigable' : 'leaf'} rel-${s.relation} role-${s.role}" style="animation-duration:${ORBIT_DURATION}s; animation-delay:${delay}s;" ${s.node ? `data-key="${esc(s.node.key)}"` : ''} title="${esc(tip || t(UI.explorerDeadEnd))}">
             ${satEmoji ? `<span class="orbit-sat-emoji">${satEmoji}</span>` : `<span class="orbit-sat-dot"></span>`}
-            <span class="orbit-sat-char">${s.char}</span>
-            <span class="orbit-sat-pinyin">${s.pinyin}</span>
+            <span class="orbit-sat-char">${esc(s.char)}</span>
+            <span class="orbit-sat-pinyin">${esc(s.pinyin)}</span>
           </div>
         </div>
       `;
       }).join('')}
     </div>
-    <div class="orbit-audio-row">
-      <button class="btn-audio orbit-audio" data-speak="${center.hanzi}">🔊 <span class="btn-label">${t(UI.listenLabel)}</span></button>
+    <div class="orbit-legend">
+      <span class="lg lg-sense">${esc(t(UI.legendSense))}</span>
+      <span class="lg lg-sound">${esc(t(UI.legendSound))}</span>
+      <span class="lg lg-radical">${esc(t(UI.legendRadical))}</span>
+      <span class="lg lg-word">${esc(t(UI.legendWord))}</span>
     </div>
+    <div class="orbit-audio-row">
+      <button class="btn-audio orbit-audio" data-speak="${esc(center.hanzi)}">🔊 <span class="btn-label">${t(UI.listenLabel)}</span></button>
+    </div>
+    <div class="explorer-details" id="explorerDetails">${renderExplorerDetails(center)}</div>
   `;
 
   sizeOrbit();
+
+  const input = document.getElementById('orbitSearch');
+  let timer = null;
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => runExplorerSearch(input.value), 120);
+  });
 
   document.getElementById('btnOrbitBack').addEventListener('click', () => {
     const prev = state.explorer.history.pop();
@@ -949,13 +1171,16 @@ function renderExplorerPage() {
   content.querySelectorAll('[data-speak]').forEach(btn => {
     btn.addEventListener('click', (e) => { e.stopPropagation(); speak(btn.dataset.speak); });
   });
-  content.querySelectorAll('.orbit-satellite.navigable').forEach(el => {
-    el.addEventListener('click', () => {
-      state.explorer.history.push(state.explorer.current);
-      state.explorer.current = el.dataset.key;
-      renderContent();
-    });
+  content.querySelectorAll('.orbit-satellite.navigable, #explorerDetails [data-key]').forEach(el => {
+    el.addEventListener('click', () => navigateExplorer(el.dataset.key));
   });
+
+  if (!Dict.ready()) {
+    Dict.load().then(onDictLoaded).catch(() => {
+      state.explorer.dictError = true;
+      if (state.category === 'explorer') renderDetailsOnly();
+    });
+  }
 }
 
 // Le rayon d'orbite (en px) est fourni aux pistes via une variable CSS,

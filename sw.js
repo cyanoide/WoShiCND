@@ -1,10 +1,11 @@
-const CACHE = 'woshicnd-v3';
+const CACHE = 'woshicnd-v4';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './app.js',
   './data.js',
+  './dict.js',
   './manifest.json',
   './icons/favicon.svg',
   './icons/apple-touch-icon.png',

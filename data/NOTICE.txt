@@ -1,0 +1,11 @@
+Données du dictionnaire / Dictionary data
+
+words.json — dérivé de CC-CEDICT (https://cc-cedict.org), licence CC BY-SA 4.0
+             https://creativecommons.org/licenses/by-sa/4.0/
+             Derived from CC-CEDICT. Filtered and reformatted by tools/build_data.py.
+
+hanzi.json, radicals.json — dérivés de Make Me a Hanzi (https://github.com/skishore/makemeahanzi),
+             licence LGPL v3 (données elles-mêmes dérivées d'Unihan et CJKlib).
+             Derived from Make Me a Hanzi dictionary.txt. Filtered and reformatted by tools/build_data.py.
+
+Régénération : python3 -I tools/build_data.py <cedict_ts.u8> <mmh_dictionary.txt> data
