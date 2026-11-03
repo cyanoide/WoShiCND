@@ -1009,6 +1009,63 @@ function startNoise() {
   setInterval(() => paint(12), 100);
 }
 
+// ---------------- DIAGNOSTIC (3 taps sur "SYS.VER") ----------------
+// Affiche les vraies dimensions mesurées sur l'appareil, pour comprendre la
+// bande en bas sur iPhone sans deviner : capture d'écran de ce panneau = données.
+function showDebugPanel() {
+  let panel = document.getElementById('debugPanel');
+  if (panel) { panel.remove(); return; }
+
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;visibility:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);';
+  document.body.appendChild(probe);
+  const cs = getComputedStyle(probe);
+  const safe = `${cs.paddingTop} ${cs.paddingRight} ${cs.paddingBottom} ${cs.paddingLeft}`;
+  probe.remove();
+
+  const h = (sel) => {
+    const el = document.querySelector(sel);
+    if (!el) return 'n/a';
+    const r = el.getBoundingClientRect();
+    return `${Math.round(r.top)}→${Math.round(r.bottom)} (h=${Math.round(r.height)})`;
+  };
+  const vv = window.visualViewport;
+  const lines = [
+    `standalone: ${window.navigator.standalone === true} / display-mode: ${window.matchMedia('(display-mode: standalone)').matches}`,
+    `inner: ${window.innerWidth}×${window.innerHeight}`,
+    `visualViewport: ${vv ? `${Math.round(vv.width)}×${Math.round(vv.height)} top=${Math.round(vv.offsetTop)}` : 'n/a'}`,
+    `screen: ${screen.width}×${screen.height}  dpr=${window.devicePixelRatio}`,
+    `html clientH: ${document.documentElement.clientHeight}  body clientH: ${document.body.clientHeight}`,
+    `safe-area (t r b l): ${safe}`,
+    `.app: ${h('.app')}`,
+    `.layout: ${h('.layout')}`,
+    `.panel-left: ${h('.panel-left')}`,
+    `.panel-right: ${h('.panel-right')}`,
+    `.bg-grid: ${h('.bg-grid')}`,
+    `.safe-bottom-fill: ${h('.safe-bottom-fill')}`,
+    `scrollY: ${window.scrollY}  (tap pour fermer)`,
+  ];
+
+  panel = document.createElement('pre');
+  panel.id = 'debugPanel';
+  panel.textContent = lines.join('\n');
+  panel.style.cssText = 'position:fixed;left:8px;right:8px;top:max(60px,env(safe-area-inset-top));z-index:9999;margin:0;padding:10px;background:#000;color:#0f0;font:11px/1.45 monospace;white-space:pre-wrap;border:1px solid #0f0;';
+  panel.addEventListener('click', () => panel.remove());
+  document.body.appendChild(panel);
+}
+
+(function wireDebugTap() {
+  const el = document.getElementById('sysVer');
+  if (!el) return;
+  let taps = 0, timer = null;
+  el.addEventListener('click', () => {
+    taps++;
+    clearTimeout(timer);
+    timer = setTimeout(() => { taps = 0; }, 1500);
+    if (taps >= 3) { taps = 0; showDebugPanel(); }
+  });
+})();
+
 // ---------------- INIT ----------------
 applyTheme();
 applyLang();
