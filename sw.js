@@ -1,4 +1,4 @@
-const CACHE = 'woshicnd-v4';
+const CACHE = 'woshicnd-v5';
 const ASSETS = [
   './',
   './index.html',
@@ -27,6 +27,8 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  // Autres origines (Supabase, CDN) : jamais mises en cache — les données du compte ne doivent pas y rester
+  if (new URL(e.request.url).origin !== self.location.origin) return;
   // Réseau en priorité, cache seulement en repli hors-ligne. L'ancienne
   // version faisait `cached || network` : elle servait immédiatement la
   // version en cache dès qu'elle existait et ne mettait à jour qu'en

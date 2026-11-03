@@ -1280,6 +1280,20 @@ const PUI = {
   importError: { fr: 'fichier non reconnu', en: 'unrecognized file' },
   copied: { fr: 'copié — colle-le dans un message ou une note', en: 'copied — paste it into a note or message' },
   copyFail: { fr: 'copie impossible : utilise « exporter »', en: 'copy failed: use "export"' },
+  accTitle: { fr: 'CONNEXION', en: 'SIGN IN' },
+  accExplain: { fr: 'Même compte que sur tes autres sites : ta progression se synchronise entre téléphone et PC, sans rien exporter.', en: 'Same account as your other sites: your progress syncs between phone and PC, no export needed.' },
+  accUser: { fr: 'Nom d\'utilisateur', en: 'Username' },
+  accPass: { fr: 'Mot de passe', en: 'Password' },
+  accLogin: { fr: 'se connecter', en: 'sign in' },
+  accConnecting: { fr: 'connexion…', en: 'signing in…' },
+  accRefused: { fr: 'identifiants refusés', en: 'sign-in refused' },
+  accLogout: { fr: 'déconnexion', en: 'sign out' },
+  accSyncBtn: { fr: '↻ synchroniser', en: '↻ sync' },
+  accSyncing: { fr: 'synchronisation…', en: 'syncing…' },
+  accSynced: { fr: 'synchronisé', en: 'synced' },
+  accError: { fr: 'erreur de synchronisation', en: 'sync error' },
+  accOffline: { fr: 'Synchronisation indisponible (hors ligne). Ta progression reste sur cet appareil.', en: 'Sync unavailable (offline). Your progress stays on this device.' },
+  accLoading: { fr: 'chargement du compte…', en: 'loading account…' },
   gotIt: { fr: 'compris ▶', en: 'got it ▶' },
   newBadge: { fr: 'NOUVEAU', en: 'NEW' },
   reverseHint: { fr: 'Quel est ce caractère ? Écris-le sur papier ou dans ta tête.', en: 'Which character is this? Write it on paper or in your head.' },
@@ -1326,8 +1340,10 @@ function markParcours(ch, status, written) {
     cur.b = 0;
     cur.d = todayNum();
   }
+  cur.t = Date.now(); // dernière réponse : sert à arbitrer entre appareils
   parcoursProgress[ch] = cur;
   saveParcours(parcoursProgress);
+  scheduleSync();
   const day = todayNum();
   parcoursActivity[day] = (parcoursActivity[day] || 0) + 1;
   try { localStorage.setItem(ACTIVITY_KEY, JSON.stringify(parcoursActivity)); } catch { /* idem */ }
@@ -1494,15 +1510,22 @@ function exportParcours() {
   return JSON.stringify({ app: 'woshicnd', v: 1, progress: parcoursProgress, activity: parcoursActivity });
 }
 
-// Fusion : pour chaque caractère on garde l'état le plus avancé (rien n'est écrasé à la baisse)
-function importParcours(text) {
-  const data = JSON.parse(text);
-  if (!data || data.app !== 'woshicnd' || typeof data.progress !== 'object') throw new Error('format');
+// Fusion de deux états : pour chaque caractère, la réponse la plus récente gagne
+// (un oubli récent sur un appareil doit l'emporter sur un vieux « je sais » sur l'autre).
+// Sans horodatage (anciens exports), on garde la boîte la plus avancée.
+function mergeProgress(data) {
   let n = 0;
-  for (const [c, v] of Object.entries(data.progress)) {
+  for (const [c, v] of Object.entries(data.progress || {})) {
     if (!v || typeof v.b !== 'number' || typeof v.d !== 'number') continue;
     const cur = parcoursProgress[c];
-    if (!cur || v.b > cur.b || (v.b === cur.b && v.d > cur.d)) { parcoursProgress[c] = { b: v.b, d: v.d, ...(v.w ? { w: v.w } : {}) }; n++; }
+    let take;
+    if (!cur) take = true;
+    else if (v.t && cur.t) take = v.t > cur.t;
+    else take = v.b > cur.b || (v.b === cur.b && v.d > cur.d);
+    if (take) {
+      parcoursProgress[c] = { b: v.b, d: v.d, ...(v.w ? { w: Math.max(v.w, (cur && cur.w) || 0) } : (cur && cur.w ? { w: cur.w } : {})), ...(v.t ? { t: v.t } : {}) };
+      n++;
+    }
   }
   for (const [d, k] of Object.entries(data.activity || {})) {
     if (typeof k === 'number') parcoursActivity[d] = Math.max(parcoursActivity[d] || 0, k);
@@ -1510,6 +1533,144 @@ function importParcours(text) {
   saveParcours(parcoursProgress);
   try { localStorage.setItem(ACTIVITY_KEY, JSON.stringify(parcoursActivity)); } catch { /* idem */ }
   return n;
+}
+
+function importParcours(text) {
+  const data = JSON.parse(text);
+  if (!data || data.app !== 'woshicnd' || typeof data.progress !== 'object') throw new Error('format');
+  const n = mergeProgress(data);
+  scheduleSync();
+  return n;
+}
+
+// ----- Compte + synchronisation (Supabase, même connexion que les autres sites) -----
+// La clé anon est publique par conception : la sécurité repose sur les règles RLS
+// (chaque utilisateur ne voit que sa ligne de woshicnd_progress).
+const SB_URL = 'https://sanopnzbhcrnqkxwulrs.supabase.co';
+const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhbm9wbnpiaGNybnFreHd1bHJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMzNDIxNTEsImV4cCI6MjEwODkxODE1MX0.sl3F0ReIZZhXql0bLNbrEusV3BjI2uq852SikvSJSjc';
+const SB_SCRIPT = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
+
+const sync = { sb: null, user: null, status: 'loading', at: null, msg: '', timer: null };
+let sbPromise = null;
+
+function ensureSupabase() {
+  if (sbPromise) return sbPromise;
+  sbPromise = new Promise((resolve, reject) => {
+    const done = () => {
+      try {
+        // clé de stockage propre : évite de se disputer le jeton de rafraîchissement avec les autres sites du même domaine
+        sync.sb = window.supabase.createClient(SB_URL, SB_ANON, { auth: { storageKey: 'woshicnd-auth', detectSessionInUrl: false } });
+        resolve(sync.sb);
+      } catch (e) { reject(e); }
+    };
+    if (window.supabase) return done();
+    const el = document.createElement('script');
+    el.src = SB_SCRIPT;
+    el.onload = done;
+    el.onerror = () => reject(new Error('offline'));
+    document.head.appendChild(el);
+  }).catch(e => { sbPromise = null; sync.status = 'unavailable'; paintAccount(); throw e; });
+  return sbPromise;
+}
+
+async function syncNow() {
+  if (!sync.sb || !sync.user) return;
+  sync.status = 'syncing'; paintAccount();
+  try {
+    const { data, error } = await sync.sb.from('woshicnd_progress').select('data').maybeSingle();
+    if (error) throw error;
+    if (data && data.data) mergeProgress(data.data);
+    const { error: upErr } = await sync.sb.from('woshicnd_progress')
+      .upsert({ user_id: sync.user.id, data: JSON.parse(exportParcours()), updated_at: new Date().toISOString() });
+    if (upErr) throw upErr;
+    sync.status = 'ok'; sync.at = Date.now(); sync.msg = '';
+  } catch (e) {
+    sync.status = 'error'; sync.msg = (e && e.message) || String(e);
+  }
+  paintAccount();
+  if (state.category === 'parcours' && state.parcours.view === 'list') renderContent();
+}
+
+function scheduleSync() {
+  if (!sync.user) return;
+  clearTimeout(sync.timer);
+  sync.timer = setTimeout(syncNow, 2500);
+}
+
+async function loginParcours(pseudo, password) {
+  const res = await fetch(`${SB_URL}/functions/v1/admin-login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pseudo, password }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || 'refused');
+  const { error } = await sync.sb.auth.setSession({ access_token: body.access_token, refresh_token: body.refresh_token });
+  if (error) throw error;
+}
+
+function initSync() {
+  ensureSupabase().then(sb => {
+    sb.auth.getSession().then(({ data }) => {
+      sync.user = (data.session && data.session.user) || null;
+      sync.status = sync.user ? 'syncing' : 'out';
+      paintAccount();
+      if (sync.user) syncNow();
+    });
+    // hors du callback : supabase-js interdit d'appeler l'API depuis onAuthStateChange
+    sb.auth.onAuthStateChange((_ev, session) => setTimeout(() => {
+      const was = sync.user && sync.user.id;
+      sync.user = (session && session.user) || null;
+      if (!sync.user) { sync.status = 'out'; paintAccount(); }
+      else if (sync.user.id !== was) syncNow();
+    }, 0));
+  }).catch(() => { /* hors ligne : l'appli marche en local */ });
+}
+
+function accountHtml() {
+  if (sync.status === 'unavailable') return `<div class="dict-note">${esc(t(PUI.accOffline))}</div>`;
+  if (sync.status === 'loading') return `<div class="dict-note">${esc(t(PUI.accLoading))}</div>`;
+  if (sync.user) {
+    const line = sync.status === 'syncing' ? t(PUI.accSyncing)
+      : sync.status === 'error' ? `${t(PUI.accError)} (${sync.msg})`
+      : `${t(PUI.accSynced)}${sync.at ? ' · ' + new Date(sync.at).toLocaleTimeString() : ''}`;
+    return `<div class="par-acc-row"><span class="par-acc-status ${sync.status}">☁ ${esc(line)}</span>
+      <button class="flash-btn" id="parSyncNow">${esc(t(PUI.accSyncBtn))}</button>
+      <button class="flash-btn" id="parLogout">${esc(t(PUI.accLogout))}</button></div>`;
+  }
+  return `<form id="parLogin" class="par-login">
+      <div class="par-login-title">☁ ${esc(t(PUI.accTitle))}</div>
+      <p>${esc(t(PUI.accExplain))}</p>
+      <label>${esc(t(PUI.accUser))} <input id="parPseudo" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+      <label>${esc(t(PUI.accPass))} <input id="parPassword" type="password" autocomplete="current-password" required></label>
+      <button class="flash-btn know" type="submit">${esc(t(PUI.accLogin))}</button>
+      <div class="dict-note" id="parLoginMsg"></div>
+    </form>`;
+}
+
+function paintAccount() {
+  const box = document.getElementById('parAccount');
+  if (!box) return;
+  // ne pas écraser le formulaire pendant la saisie
+  if (box.querySelector('#parLogin') && !sync.user && document.activeElement && box.contains(document.activeElement)) return;
+  box.innerHTML = accountHtml();
+  wireAccount();
+}
+
+function wireAccount() {
+  const form = document.getElementById('parLogin');
+  if (form) form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById('parLoginMsg');
+    msg.textContent = t(PUI.accConnecting);
+    try {
+      await loginParcours(document.getElementById('parPseudo').value.trim().toLowerCase(), document.getElementById('parPassword').value);
+    } catch (err) { msg.textContent = t(PUI.accRefused); }
+  });
+  const now = document.getElementById('parSyncNow');
+  if (now) now.addEventListener('click', syncNow);
+  const out = document.getElementById('parLogout');
+  if (out) out.addEventListener('click', () => sync.sb.auth.signOut());
 }
 
 function backupHtml() {
@@ -1593,6 +1754,7 @@ function renderParcoursList(content) {
       </button>
       <div class="par-session-how">${esc(t(PUI.howItWorks))}</div>
     </div>
+    <div class="par-account" id="parAccount">${accountHtml()}</div>
     ${renderProgressPanel()}
     <div class="dict-note">${esc(t(PUI.radicalsSupport))}</div>
     <div class="par-grid">${tiles}</div>
@@ -1604,6 +1766,7 @@ function renderParcoursList(content) {
   }));
   document.getElementById('parSession').addEventListener('click', startSession);
   wireBackup(content);
+  wireAccount();
 }
 
 function startLesson(rad, page) {
@@ -1970,6 +2133,7 @@ applyLang();
 renderMenu();
 renderContent();
 startNoise();
+initSync();
 
 // Enregistrement du service worker (mode hors-ligne)
 if ('serviceWorker' in navigator) {

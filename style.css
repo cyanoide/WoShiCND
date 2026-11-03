@@ -1056,3 +1056,15 @@ body {
 @media (max-width: 768px) {
   .par-canvas { width: min(260px, 70vw); height: min(260px, 70vw); }
 }
+
+.par-account { margin-bottom: 18px; }
+.par-acc-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.par-acc-status { font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px; color: var(--muted); flex: 1 1 160px; }
+.par-acc-status.ok { color: var(--good); }
+.par-acc-status.error { color: var(--bad); }
+.par-login { border: 1px solid var(--border); background: var(--bg-card); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.par-login-title { font-family: var(--font-mono); letter-spacing: 2px; color: var(--accent); font-size: 12px; }
+.par-login p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.par-login label { display: flex; flex-direction: column; gap: 4px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; }
+.par-login input { padding: 10px; font-family: var(--font-mono); font-size: 16px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 0; outline: none; }
+.par-login input:focus { border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
