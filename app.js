@@ -1204,8 +1204,431 @@ function sizeOrbit() {
   });
 }
 
+// ---------------- PARCOURS (apprendre en partant des radicaux) ----------------
+// Un radical -> ses caractères les plus utiles (cartes une par une) -> le son
+// partagé par les caractères d'une même famille -> les mots. Progression gardée
+// sur l'appareil.
+const PARCOURS_KEY = 'woshicnd-parcours'; // { [char]: 'know' | 'retry' }
+const LESSON_SIZE = 10;
+
+const PUI = {
+  title: { fr: 'Parcours', en: 'Path' },
+  sub: { fr: 'PARS D\'UN RADICAL ET VA LOIN', en: 'START FROM A RADICAL AND GO FAR' },
+  progress: { fr: 'caractères connus', en: 'characters known' },
+  toReview: { fr: 'à revoir', en: 'to review' },
+  review: { fr: '↻ revoir mes « à revoir »', en: '↻ review my "to review"' },
+  next: { fr: '▶ continuer', en: '▶ continue' },
+  reviewEmpty: { fr: 'rien à revoir pour l\'instant', en: 'nothing to review yet' },
+  all: { fr: 'tous les radicaux, du plus utile au moins utile', en: 'all radicals, most useful first' },
+  chars: { fr: 'caractères', en: 'characters' },
+  back: { fr: '← retour', en: '← back' },
+  start: { fr: 'COMMENCER', en: 'START' },
+  introWhy: { fr: 'Ce radical est présent dans', en: 'This radical appears in' },
+  introHow: { fr: 'Il donne souvent le SENS des caractères. Voici les plus utiles :', en: 'It often gives the MEANING of characters. The most useful ones:' },
+  forms: { fr: 'formes', en: 'forms' },
+  reveal: { fr: 'TAPE POUR VOIR', en: 'TAP TO REVEAL' },
+  recall: { fr: 'Sais-tu le lire et le traduire ?', en: 'Can you read and translate it?' },
+  know: { fr: '✓ je sais', en: '✓ I know it' },
+  retry: { fr: '↻ à revoir', en: '↻ review' },
+  roleSense: { fr: 'le radical donne le SENS', en: 'the radical gives the MEANING' },
+  roleSound: { fr: 'le radical donne le SON', en: 'the radical gives the SOUND' },
+  partSound: { fr: 'partie SON', en: 'SOUND part' },
+  partSense: { fr: 'partie SENS', en: 'MEANING part' },
+  words: { fr: 'MOTS', en: 'WORDS' },
+  soundFamily: { fr: 'même son : famille de', en: 'same sound: family of' },
+  soundTitle: { fr: 'FAMILLE DE SON', en: 'SOUND FAMILY' },
+  soundExplain: { fr: 'Ces caractères partagent la même partie son : leur prononciation se ressemble.', en: 'These characters share the same sound part, so they sound alike.' },
+  openExplorer: { fr: '🔍 explorer', en: '🔍 explore' },
+  done: { fr: 'LEÇON TERMINÉE', en: 'LESSON COMPLETE' },
+  moreChars: { fr: 'dix caractères de plus', en: 'ten more characters' },
+  nextRadical: { fr: 'radical suivant ▶', en: 'next radical ▶' },
+  reviewRetry: { fr: '↻ revoir ceux à revoir', en: '↻ review the retry ones' },
+  loading: { fr: 'chargement du dictionnaire…', en: 'loading dictionary…' },
+  mastered: { fr: 'connus', en: 'known' },
+  session: { fr: '▶ SESSION DU JOUR', en: '▶ TODAY\'S SESSION' },
+  sessionTitle: { fr: 'Session du jour', en: 'Today\'s session' },
+  dueLabel: { fr: 'à réviser', en: 'due' },
+  newLabel: { fr: 'nouveaux', en: 'new' },
+  howItWorks: { fr: 'Peu de nouveaux caractères, les plus fréquents d\'abord. Ceux que tu rates reviennent vite, ceux que tu sais reviennent de plus en plus tard (1, 3, 7, 16 jours…). 10 minutes par jour battent 1 heure le dimanche.', en: 'Few new characters, most frequent first. Misses come back soon, known ones come back later and later (1, 3, 7, 16 days…). 10 minutes a day beats 1 hour on Sunday.' },
+  radicalsSupport: { fr: 'Les briques : un radical = un indice de sens. Utile pour comprendre, pas pour tout apprendre d\'un coup.', en: 'The building blocks: a radical is a meaning hint. Good for understanding, not for learning everything at once.' },
+  gotIt: { fr: 'compris ▶', en: 'got it ▶' },
+  newBadge: { fr: 'NOUVEAU', en: 'NEW' },
+  reverseHint: { fr: 'Quel est ce caractère ? Écris-le sur papier ou dans ta tête.', en: 'Which character is this? Write it on paper or in your head.' },
+};
+
+state.parcours = { newSet: new Set(), requeued: new Set(), view: 'list', rad: null, page: 0, deck: [], title: '', i: -1, revealed: false, ph: null };
+
+const todayNum = () => Math.floor(Date.now() / 864e5);
+const SRS_DAYS = [0, 1, 3, 7, 16, 35, 80]; // intervalle (jours) selon la "boîte" atteinte
+const SESSION_NEW = 5;     // nouveaux caractères par session
+const SESSION_REVIEWS = 20;
+
+function loadParcours() {
+  let raw = {};
+  try { raw = JSON.parse(localStorage.getItem(PARCOURS_KEY)) || {}; } catch { raw = {}; }
+  // migration de l'ancien format 'know' / 'retry'
+  for (const [c, v] of Object.entries(raw)) {
+    if (v === 'know') raw[c] = { b: 1, d: todayNum() + 1 };
+    else if (v === 'retry') raw[c] = { b: 0, d: todayNum() };
+  }
+  return raw;
+}
+function saveParcours(p) {
+  try { localStorage.setItem(PARCOURS_KEY, JSON.stringify(p)); } catch { /* stockage indisponible : la progression ne sera pas gardée */ }
+}
+let parcoursProgress = loadParcours();
+function markParcours(ch, status) {
+  const cur = parcoursProgress[ch] || { b: 0, d: 0 };
+  if (status === 'know') {
+    cur.b = Math.min(cur.b + 1, SRS_DAYS.length - 1);
+    cur.d = todayNum() + SRS_DAYS[cur.b];
+  } else {
+    cur.b = 0;
+    cur.d = todayNum();
+  }
+  parcoursProgress[ch] = cur;
+  saveParcours(parcoursProgress);
+}
+const isKnown = (c) => !!parcoursProgress[c] && parcoursProgress[c].b >= 1;
+const isRetry = (c) => !!parcoursProgress[c] && parcoursProgress[c].b === 0;
+const dueChars = () => Object.keys(parcoursProgress).filter(c => parcoursProgress[c].d <= todayNum())
+  .sort((a, b) => parcoursProgress[a].d - parcoursProgress[b].d);
+// Nouveaux caractères : les plus fréquents d'abord (c'est ce qui sert le plus vite)
+// Les caractères de ton propre vocabulaire passent avant le reste
+const newChars = (n) => {
+  const mine = [...new Set([...VOCAB.map(v => v.hanzi).join(''), ...Object.keys(RADICALS)])].filter(c => Dict.char(c));
+  return [...mine, ...Dict.topChars(1500)].filter((c, i, arr) => !parcoursProgress[c] && arr.indexOf(c) === i).slice(0, n);
+};
+
+// Radicaux regroupés par forme complète (氵 sous 水), du plus fécond au moins fécond
+let lessonRadicalsCache = null;
+function lessonRadicals() {
+  if (lessonRadicalsCache) return lessonRadicalsCache;
+  const groups = new Map();
+  Dict.radicals().forEach(r => {
+    const c = Dict.canonical(r.r);
+    if (!groups.has(c)) groups.set(c, { r: c, n: 0, show: r.r, showN: 0 });
+    const g = groups.get(c);
+    g.n += r.n;
+    if (r.n > g.showN) { g.show = r.r; g.showN = r.n; }
+  });
+  lessonRadicalsCache = [...groups.values()].filter(g => Dict.familySize(g.r) > 0).sort((a, b) => b.n - a.n);
+  return lessonRadicalsCache;
+}
+
+function radicalInfo(rad) {
+  const rec = Dict.char(rad);
+  const cur = RADICALS[rad];
+  const meaning = cur ? t(cur.meaning) : (rec && rec.d) || '';
+  return { pinyin: cur ? cur.pinyin : firstReading(rec && rec.p), meaning: shortLabel(meaning), curated: !!cur };
+}
+
+function lessonChars(rad) {
+  return Dict.family(rad, 400).filter(c => c !== rad && !Dict.variants(rad).includes(c));
+}
+
+function knownCount(rad) {
+  return lessonChars(rad).filter(c => isKnown(c)).length;
+}
+
+function retryChars() {
+  return Object.keys(parcoursProgress).filter(c => isRetry(c));
+}
+
+// Session du jour : d'abord les révisions dues, puis quelques nouveaux caractères
+function startSession() {
+  const due = dueChars().slice(0, SESSION_REVIEWS);
+  const fresh = newChars(SESSION_NEW);
+  const deck = [...due, ...fresh];
+  Object.assign(state.parcours, { newSet: new Set(fresh), requeued: new Set() });
+  startDeck(deck, t(PUI.sessionTitle), null, 0);
+}
+
+function startDeck(deck, title, rad, page) {
+  if (rad) Object.assign(state.parcours, { newSet: new Set(), requeued: new Set() });
+  Object.assign(state.parcours, { view: 'lesson', deck, title, rad, page: page || 0, i: rad ? -1 : 0 });
+  state.parcours.revealed = !rad && state.parcours.newSet.has(deck[0]); // un caractère nouveau s'apprend face visible
+  renderContent();
+  scrollContentTop();
+}
+
+function scrollContentTop() {
+  const c = document.getElementById('content');
+  if (c) c.scrollTop = 0;
+}
+
+function goParcours(view, extra) {
+  Object.assign(state.parcours, { view }, extra || {});
+  renderContent();
+  scrollContentTop();
+}
+
+function openInExplorer(ch) {
+  state.category = 'explorer';
+  if (ch !== state.explorer.current) state.explorer.history.push(state.explorer.current);
+  state.explorer.current = ch;
+  renderMenu();
+  renderContent();
+  scrollContentTop();
+}
+
+function nextRadicalToLearn() {
+  return lessonRadicals().find(g => {
+    const chars = lessonChars(g.r);
+    return chars.length && chars.slice(0, LESSON_SIZE).some(c => !parcoursProgress[c]);
+  });
+}
+
+// Pourquoi ce caractère contient ce radical : sens, son, ou les deux
+function roleHtml(ch, rad) {
+  const rec = Dict.char(ch);
+  if (!rec) return '';
+  const forms = [rad, ...Dict.variants(rad)];
+  const parts = [];
+  if (rec.t === 'p' && rec.se && rec.ph) {
+    if (forms.includes(rec.se)) {
+      parts.push(`<div class="par-role">${chipHtml(rec.se, t(PUI.partSense))} <span>${esc(t(PUI.roleSense))}</span> ${chipHtml(rec.ph, t(PUI.partSound))}</div>`);
+    } else if (forms.includes(rec.ph)) {
+      parts.push(`<div class="par-role">${chipHtml(rec.ph, t(PUI.partSound))} <span>${esc(t(PUI.roleSound))}</span> ${chipHtml(rec.se, t(PUI.partSense))}</div>`);
+    } else {
+      parts.push(`<div class="par-role">${chipHtml(rec.se, t(PUI.partSense))} ${chipHtml(rec.ph, t(PUI.partSound))}</div>`);
+    }
+  } else if (rec.h) {
+    parts.push(`<div class="par-hint">${esc(rec.h)}</div>`);
+  }
+  return parts.join('');
+}
+
+function soundFamilyHtml(ch) {
+  const rec = Dict.char(ch);
+  const ph = rec && rec.ph;
+  if (!ph || Dict.soundFamily(ph).length < 2) return '';
+  return `<button class="flash-btn par-sound" data-sound="${esc(ph)}">${esc(t(PUI.soundFamily))} ${esc(ph)} · ${Dict.soundFamily(ph).length}</button>`;
+}
+
+function renderParcoursList(content) {
+  const radicals = lessonRadicals();
+  const totalChars = radicals.reduce((s, g) => s + lessonChars(g.r).length, 0);
+  const known = Object.keys(parcoursProgress).filter(isKnown).length;
+  const retry = retryChars().length;
+  const dueNow = dueChars().length;
+
+  const tiles = radicals.map(g => {
+    const info = radicalInfo(g.r);
+    const total = lessonChars(g.r).length;
+    const k = knownCount(g.r);
+    const pct = total ? Math.round((k / total) * 100) : 0;
+    const em = emojiFor(g.r) || emojiFor(g.show);
+    return `<div class="par-tile ${k > 0 ? 'started' : ''}" data-rad="${esc(g.r)}">
+      <div class="par-tile-char">${esc(g.show === g.r ? g.r : g.show)}${em ? ` <span class="par-tile-emoji">${em}</span>` : ''}</div>
+      <div class="par-tile-py">${esc(info.pinyin)}</div>
+      <div class="par-tile-meaning">${esc(info.meaning)}</div>
+      <div class="par-tile-bar"><span style="width:${pct}%"></span></div>
+      <div class="par-tile-count">${k} / ${total}</div>
+    </div>`;
+  }).join('');
+
+  content.innerHTML = `
+    ${pageHeader(t(PUI.title), t(PUI.sub))}
+    <div class="par-summary">
+      <div class="par-summary-stat"><b>${known}</b> ${esc(t(PUI.progress))} / ${totalChars}</div>
+      <div class="par-summary-stat"><b>${retry}</b> ${esc(t(PUI.toReview))}</div>
+    </div>
+    <div class="par-session">
+      <button class="par-session-btn" id="parSession">
+        <span class="par-session-title">${esc(t(PUI.session))}</span>
+        <span class="par-session-sub">${dueNow} ${esc(t(PUI.dueLabel))} · ${SESSION_NEW} ${esc(t(PUI.newLabel))}</span>
+      </button>
+      <div class="par-session-how">${esc(t(PUI.howItWorks))}</div>
+    </div>
+    <div class="dict-note">${esc(t(PUI.radicalsSupport))}</div>
+    <div class="par-grid">${tiles}</div>
+  `;
+
+  content.querySelectorAll('.par-tile').forEach(el => el.addEventListener('click', () => {
+    startLesson(el.dataset.rad, 0);
+  }));
+  document.getElementById('parSession').addEventListener('click', startSession);
+}
+
+function startLesson(rad, page) {
+  const chars = lessonChars(rad).slice(page * LESSON_SIZE, (page + 1) * LESSON_SIZE);
+  startDeck(chars, rad, rad, page);
+}
+
+function renderParcoursLesson(content) {
+  const p = state.parcours;
+  const rad = p.rad;
+  const info = rad ? radicalInfo(rad) : null;
+
+  // Introduction du radical (avant la première carte)
+  if (rad && p.i === -1) {
+    const all = lessonChars(rad);
+    const forms = [rad, ...Dict.variants(rad)];
+    const em = emojiFor(rad);
+    content.innerHTML = `
+      ${pageHeader(t(PUI.title), `${rad} · ${info.meaning}`)}
+      <div class="par-toolbar"><button class="flash-btn" id="parBack">${esc(t(PUI.back))}</button></div>
+      <div class="flash-wrap">
+        <div class="flash-card par-intro">
+          ${em ? `<div class="flash-emoji">${em}</div>` : ''}
+          <div class="flash-hanzi">${esc(rad)}</div>
+          <div class="flash-pinyin">${esc(info.pinyin)}</div>
+          <div class="flash-fr">${esc(info.meaning)}</div>
+          ${forms.length > 1 ? `<div class="flash-hint">${esc(t(PUI.forms))} : ${forms.map(esc).join(' · ')}</div>` : ''}
+          <div class="par-intro-text">${esc(t(PUI.introWhy))} <b>${all.length}</b> ${esc(t(PUI.chars))}. ${esc(t(PUI.introHow))}</div>
+          <div class="dict-chips">${all.slice(p.page * LESSON_SIZE, p.page * LESSON_SIZE + 5).map(c => chipHtml(c)).join('')}</div>
+        </div>
+        <div class="flash-controls">
+          <button class="btn-audio" data-speak="${esc(rad)}">🔊</button>
+          <button class="flash-btn know" id="parStart">${esc(t(PUI.start))}</button>
+        </div>
+      </div>`;
+    document.getElementById('parBack').addEventListener('click', () => goParcours('list'));
+    document.getElementById('parStart').addEventListener('click', () => { p.i = 0; p.revealed = false; renderContent(); scrollContentTop(); });
+    content.querySelectorAll('[data-speak]').forEach(b => b.addEventListener('click', () => speak(b.dataset.speak)));
+    content.querySelectorAll('.dict-chip').forEach(b => b.addEventListener('click', () => openInExplorer(b.dataset.key)));
+    return;
+  }
+
+  // Fin de leçon
+  if (p.i >= p.deck.length) {
+    const k = p.deck.filter(c => isKnown(c)).length;
+    const r = p.deck.filter(c => isRetry(c)).length;
+    const hasMore = rad && lessonChars(rad).length > (p.page + 1) * LESSON_SIZE;
+    const nextRad = nextRadicalToLearn();
+    content.innerHTML = `
+      ${pageHeader(t(PUI.done), p.title)}
+      <div class="flash-wrap">
+        <div class="flash-card par-intro">
+          <div class="flash-hanzi">${k} / ${p.deck.length}</div>
+          <div class="flash-hint">${k} ${esc(t(PUI.mastered))} · ${r} ${esc(t(PUI.toReview))}</div>
+        </div>
+        <div class="par-actions">
+          ${r ? `<button class="flash-btn retry" id="parRetryNow">${esc(t(PUI.reviewRetry))}</button>` : ''}
+          ${hasMore ? `<button class="flash-btn know" id="parMore">${esc(t(PUI.moreChars))}</button>` : ''}
+          ${nextRad && (!rad || nextRad.r !== rad) ? `<button class="flash-btn" id="parNextRad">${esc(t(PUI.nextRadical))} ${esc(nextRad.show)}</button>` : ''}
+          <button class="flash-btn" id="parBack">${esc(t(PUI.back))}</button>
+        </div>
+      </div>`;
+    const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+    bind('parBack', () => goParcours('list'));
+    bind('parMore', () => startLesson(rad, p.page + 1));
+    bind('parNextRad', () => {
+      const chars = lessonChars(nextRad.r);
+      const firstUnknown = chars.findIndex(c => !parcoursProgress[c]);
+      startLesson(nextRad.r, Math.max(0, Math.floor(firstUnknown / LESSON_SIZE)));
+    });
+    bind('parRetryNow', () => startDeck(p.deck.filter(c => isRetry(c)), t(PUI.reviewRetry), null, 0));
+    return;
+  }
+
+  // Carte caractère
+  const ch = p.deck[p.i];
+  const rec = Dict.char(ch) || {};
+  const cardRad = rad || Dict.canonical(rec.r || ch);
+  const em = emojiFor(ch);
+  const header = `${pageHeader(t(PUI.title), p.title)}
+      <div class="par-toolbar"><button class="flash-btn" id="parBack">${esc(t(PUI.back))}</button></div>`;
+
+  const isNew = p.newSet.has(ch);
+  // une carte sur deux en sens inverse : on lit le sens, il faut retrouver le caractère
+  const reverse = !isNew && !rad && p.i % 2 === 1;
+
+  if (!p.revealed) {
+    const front = reverse
+      ? `<div class="par-def par-def-big">${esc(rec.d || '')}</div><div class="flash-pinyin">${esc(rec.p || '')}</div><div class="flash-hint">${esc(t(PUI.reverseHint))}</div>`
+      : `<div class="flash-hanzi">${esc(ch)}</div><div class="flash-hint">${esc(t(PUI.recall))}</div>`;
+    content.innerHTML = `${header}
+      <div class="flash-wrap">
+        <div class="flash-card" id="parCard">
+          <span class="flash-progress">${p.i + 1} / ${p.deck.length}</span>
+          ${front}
+          <div class="flash-hint">${esc(t(PUI.reveal))}</div>
+        </div>
+      </div>`;
+    document.getElementById('parCard').addEventListener('click', () => { p.revealed = true; renderContent(); scrollContentTop(); });
+  } else {
+    const words = Dict.wordsWith(ch, 4);
+    content.innerHTML = `${header}
+      <div class="flash-wrap">
+        <div class="flash-card par-card-back" id="parCard">
+          <span class="flash-progress">${p.i + 1} / ${p.deck.length}</span>
+          ${isNew ? `<span class="par-new-badge">${esc(t(PUI.newBadge))}</span>` : ''}
+          ${em ? `<div class="flash-emoji">${em}</div>` : ''}
+          <div class="flash-hanzi">${esc(ch)}</div>
+          <div class="flash-pinyin">${esc(rec.p || '')}</div>
+          <div class="par-def">${esc(rec.d || '')}<span class="dict-en">EN</span></div>
+          ${roleHtml(ch, cardRad)}
+          ${words.length ? `<div class="par-words"><div class="par-words-title">${esc(t(PUI.words))}</div>${words.map(rowHtml).join('')}</div>` : ''}
+          ${soundFamilyHtml(ch)}
+          <div class="par-links">
+            <button class="btn-audio" data-speak="${esc(ch)}">🔊</button>
+            <button class="flash-btn" data-explore="${esc(ch)}">${esc(t(PUI.openExplorer))}</button>
+          </div>
+        </div>
+        <div class="flash-controls">
+          ${isNew ? '' : `<button class="flash-btn retry" id="parRetry">${esc(t(PUI.retry))}</button>`}
+          <button class="flash-btn know" id="parKnow">${esc(isNew ? t(PUI.gotIt) : t(PUI.know))}</button>
+        </div>
+      </div>`;
+    const advance = (status) => {
+      markParcours(ch, status);
+      // nouveau ou raté : il revient une fois à la fin de la session, pour vérifier qu'il a tenu
+      if ((isNew || status === 'retry') && !p.requeued.has(ch)) { p.requeued.add(ch); p.deck.push(ch); }
+      p.newSet.delete(ch);
+      p.i++;
+      p.revealed = p.i < p.deck.length && p.newSet.has(p.deck[p.i]);
+      renderContent();
+      scrollContentTop();
+    };
+    document.getElementById('parKnow').addEventListener('click', () => advance('know'));
+    const rt = document.getElementById('parRetry');
+    if (rt) rt.addEventListener('click', () => advance('retry'));
+    content.querySelectorAll('[data-speak]').forEach(b => b.addEventListener('click', () => speak(b.dataset.speak)));
+    content.querySelectorAll('[data-explore]').forEach(b => b.addEventListener('click', () => openInExplorer(b.dataset.explore)));
+    content.querySelectorAll('.dict-chip').forEach(b => b.addEventListener('click', () => openInExplorer(b.dataset.key)));
+    content.querySelectorAll('.dict-row').forEach(b => b.addEventListener('click', () => openInExplorer(b.dataset.key)));
+    content.querySelectorAll('[data-sound]').forEach(b => b.addEventListener('click', () => goParcours('sound', { ph: b.dataset.sound })));
+  }
+  document.getElementById('parBack').addEventListener('click', () => goParcours('list'));
+}
+
+function renderParcoursSound(content) {
+  const ph = state.parcours.ph;
+  const family = [...new Set([ph, ...Dict.soundFamily(ph)])].filter(c => Dict.char(c)).slice(0, 40);
+  content.innerHTML = `
+    ${pageHeader(t(PUI.soundTitle), `${ph} · ${firstReading((Dict.char(ph) || {}).p)}`)}
+    <div class="par-toolbar"><button class="flash-btn" id="parBack">${esc(t(PUI.back))}</button></div>
+    <div class="dict-note">${esc(t(PUI.soundExplain))}</div>
+    <div class="dict-rows">${family.map(c => {
+      const r = Dict.char(c);
+      return rowHtml([c, '', firstReading(r.p), r.d || '']);
+    }).join('')}</div>`;
+  document.getElementById('parBack').addEventListener('click', () => {
+    state.parcours.view = 'lesson';
+    renderContent();
+  });
+  content.querySelectorAll('.dict-row').forEach(b => b.addEventListener('click', () => openInExplorer(b.dataset.key)));
+}
+
+function renderParcoursPage() {
+  const content = document.getElementById('content');
+  if (!Dict.ready()) {
+    content.innerHTML = `${pageHeader(t(PUI.title), t(PUI.sub))}<div class="dict-note">${esc(t(PUI.loading))}</div>`;
+    Dict.load().then(() => { if (state.category === 'parcours') renderContent(); })
+      .catch(() => { content.innerHTML = `${pageHeader(t(PUI.title), t(PUI.sub))}<div class="dict-note">${esc(t(UI.dictError))}</div>`; });
+    return;
+  }
+  const v = state.parcours.view;
+  if (v === 'lesson') return renderParcoursLesson(content);
+  if (v === 'sound') return renderParcoursSound(content);
+  return renderParcoursList(content);
+}
+
 // ---------------- ROUTER ----------------
 function renderContent() {
+  if (state.category === 'parcours') return renderParcoursPage();
   if (state.category === 'explorer') return renderExplorerPage();
   if (state.category === 'radicaux') return renderRadicauxPage();
   if (state.category === 'revision') return renderRevisionPage();

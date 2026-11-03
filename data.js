@@ -32,6 +32,7 @@ const RADICALS = {
 
 // Catégories affichées dans le menu, dans l'ordre
 const CATEGORIES = [
+  { id: 'parcours', label: { fr: 'Parcours', en: 'Path' }, sub: { fr: '学 · DES RADICAUX AUX MOTS', en: '学 · FROM RADICALS TO WORDS' } },
   { id: 'fondations', label: { fr: 'Fondations', en: 'Foundations' }, sub: { fr: 'LES BRIQUES DE BASE', en: 'CORE BUILDING BLOCKS' } },
   { id: 'animaux', label: { fr: 'Animaux', en: 'Animals' }, sub: { fr: '动物 · DŌNGWÙ', en: '动物 · DŌNGWÙ' } },
   { id: 'fruits', label: { fr: 'Fruits', en: 'Fruits' }, sub: { fr: '水果 · SHUǏGUǑ', en: '水果 · SHUǏGUǑ' } },

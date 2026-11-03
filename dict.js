@@ -15,6 +15,7 @@ const Dict = (() => {
   const wordsByChar = new Map();
   const charCount = new Map();
   const familyByRadical = new Map();
+  const familyByPhonetic = new Map();
   let pyKeys = [];
 
   // Formes réduites des radicaux -> radical complet (氵 est 水 à gauche d'un caractère, etc.)
@@ -51,6 +52,14 @@ const Dict = (() => {
       const key = canonical(rec.r);
       if (!familyByRadical.has(key)) familyByRadical.set(key, []);
       familyByRadical.get(key).push(ch);
+    }
+    for (const [ch, rec] of Object.entries(hanzi)) {
+      if (!rec.ph) continue;
+      if (!familyByPhonetic.has(rec.ph)) familyByPhonetic.set(rec.ph, []);
+      familyByPhonetic.get(rec.ph).push(ch);
+    }
+    for (const list of familyByPhonetic.values()) {
+      list.sort((a, b) => (charCount.get(b) || 0) - (charCount.get(a) || 0));
     }
     for (const list of familyByRadical.values()) {
       list.sort((a, b) => (charCount.get(b) || 0) - (charCount.get(a) || 0));
@@ -135,6 +144,8 @@ const Dict = (() => {
     char: (ch) => hanzi[ch] || null,
     word: (simp) => wordsBySimp.get(simp) || null,
     wordsWith,
+    topChars: (n) => [...charCount.entries()].filter(([c]) => hanzi[c] && hanzi[c].p).sort((a, b) => b[1] - a[1]).slice(0, n).map(e => e[0]),
+    soundFamily: (ph) => familyByPhonetic.get(ph) || [],
     canonical,
     variants: (radical) => variantsOf.get(radical) || [],
     family: (radical, limit = 80) => (familyByRadical.get(canonical(radical)) || []).slice(0, limit),

@@ -989,3 +989,42 @@ body {
   .write-controls .flash-btn, .write-controls .btn-audio { padding: 8px 12px; font-size: 13px; }
   .write-controls .btn-label { display: none; }
 }
+
+/* --- Parcours (apprentissage) --- */
+.par-summary { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 12px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; }
+.par-summary b { color: var(--accent); font-size: 16px; }
+.par-session { margin: 4px 0 22px; }
+.par-session-btn {
+  width: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 16px; font-family: var(--font-mono); color: var(--accent); cursor: pointer;
+  background: var(--item-selected); border: 1px solid var(--accent); box-shadow: 0 0 14px var(--accent-glow);
+}
+.par-session-btn:active { box-shadow: 0 0 22px var(--accent-glow); }
+.par-session-title { font-size: 16px; letter-spacing: 2px; }
+.par-session-sub { font-size: 11px; letter-spacing: 1px; color: var(--text); opacity: 0.75; }
+.par-session-how { margin-top: 10px; font-size: 12px; line-height: 1.6; color: var(--muted); }
+.par-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 14px 0; }
+.par-toolbar { display: flex; justify-content: center; margin-bottom: 12px; }
+.par-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; margin-top: 8px; }
+.par-tile { border: 1px solid var(--border); background: var(--bg-card); padding: 10px 8px; cursor: pointer; text-align: center; }
+.par-tile:hover, .par-tile:active { border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
+.par-tile.started { border-color: var(--tag-mot); }
+.par-tile-char { font-size: 26px; line-height: 1.1; }
+.par-tile-emoji { font-size: 16px; }
+.par-tile-py { font-family: var(--font-pinyin); font-size: 10px; color: var(--accent); }
+.par-tile-meaning { font-size: 11px; opacity: 0.85; min-height: 1.3em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.par-tile-bar { height: 3px; margin-top: 6px; background: var(--border); }
+.par-tile-bar span { display: block; height: 100%; background: var(--tag-mot); }
+.par-tile-count { font-family: var(--font-mono); font-size: 9px; color: var(--muted); margin-top: 3px; }
+.par-intro { cursor: default; }
+.par-intro-text { font-size: 13px; line-height: 1.5; max-width: 320px; }
+.par-card-back { cursor: default; justify-content: flex-start; }
+.par-def { font-size: 16px; line-height: 1.4; display: flex; align-items: center; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.par-def-big { font-size: 22px; font-weight: 600; text-transform: capitalize; }
+.par-new-badge { position: absolute; top: 10px; left: 14px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 1px; color: var(--bg); background: var(--accent); padding: 1px 6px; }
+.par-role { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; font-size: 12px; }
+.par-hint { font-size: 12px; color: var(--muted); max-width: 320px; }
+.par-words { width: 100%; text-align: left; }
+.par-words-title { font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px; color: var(--muted); margin-bottom: 4px; }
+.par-links { display: flex; gap: 10px; align-items: center; justify-content: center; }
+.par-sound { max-width: 100%; white-space: normal; }
