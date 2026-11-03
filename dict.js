@@ -144,7 +144,11 @@ const Dict = (() => {
     char: (ch) => hanzi[ch] || null,
     word: (simp) => wordsBySimp.get(simp) || null,
     wordsWith,
-    topChars: (n) => [...charCount.entries()].filter(([c]) => hanzi[c] && hanzi[c].p).sort((a, b) => b[1] - a[1]).slice(0, n).map(e => e[0]),
+    // du plus fréquent au moins fréquent (rang de la liste de Jun Da)
+    topChars: (n) => Object.keys(hanzi).filter(c => hanzi[c].f && hanzi[c].p).sort((a, b) => hanzi[a].f - hanzi[b].f).slice(0, n),
+    rank: (ch) => (hanzi[ch] && hanzi[ch].f) || 0,
+    hsk: (ch) => (hanzi[ch] && hanzi[ch].l) || 0,
+    charsOfHsk: (lvl) => Object.keys(hanzi).filter(c => hanzi[c].l === lvl).sort((a, b) => hanzi[a].f - hanzi[b].f),
     soundFamily: (ph) => familyByPhonetic.get(ph) || [],
     canonical,
     variants: (radical) => variantsOf.get(radical) || [],

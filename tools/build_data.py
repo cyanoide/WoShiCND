@@ -5,10 +5,14 @@ Génère les données du dictionnaire de l'appli à partir de deux sources libre
   - Make Me a Hanzi dictionary.txt (LGPL v3, dérivé d'Unihan + CJKlib) :
     radical, décomposition, étymologie (phonétique / sémantique) par caractère
 
-Usage : python3 -I tools/build_data.py <cedict_ts.u8> <mmh_dictionary.txt> <dossier_sortie>
+  - hanziDB.csv (MIT, d'après la liste de fréquence de Jun Da) : rang de fréquence
+    et niveau HSK par caractère (optionnel)
+
+Usage : python3 -I tools/build_data.py <cedict_ts.u8> <mmh_dictionary.txt> <dossier_sortie> [hanziDB.csv]
 Sorties : hanzi.json, radicals.json, words.json
 """
 import collections
+import csv
 import json
 import os
 import re
@@ -99,7 +103,19 @@ def clean_glosses(glosses):
     return out
 
 
-def main(cedict_path, mmh_path, out_dir):
+def load_frequency(path):
+    """char -> (rang de fréquence, niveau HSK ou 0)"""
+    out = {}
+    with open(path, encoding='utf-8', newline='') as f:
+        for row in csv.DictReader(f):
+            ch = row.get('charcter') or row.get('character')
+            if not ch:
+                continue
+            out[ch] = (int(row['frequency_rank']), int(row['hsk_level'] or 0))
+    return out
+
+
+def main(cedict_path, mmh_path, out_dir, freq_path=None):
     os.makedirs(out_dir, exist_ok=True)
 
     # ---- caractères (Make Me a Hanzi) ----
@@ -134,6 +150,13 @@ def main(cedict_path, mmh_path, out_dir):
             if comps:
                 rec['c'] = comps
             hanzi[ch] = rec
+
+    if freq_path:
+        for ch, (rank, hsk) in load_frequency(freq_path).items():
+            if ch in hanzi:
+                hanzi[ch]['f'] = rank
+                if hsk:
+                    hanzi[ch]['l'] = hsk
 
     radicals = []
     for r, n in rad_count.most_common():
@@ -178,6 +201,6 @@ def main(cedict_path, mmh_path, out_dir):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 4:
+    if len(sys.argv) not in (4, 5):
         sys.exit(__doc__)
     main(*sys.argv[1:])

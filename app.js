@@ -694,7 +694,10 @@ function resetWriteFeedback() {
 const SCORE_SIZE = 120;
 const SCORE_MIN_INK = 60; // px encrés minimum avant de juger le tracé
 
-function setupWriteCanvas(char) {
+// opts.blind : forcer le mode aveugle (sinon réglage de la page Écriture)
+// opts.onResult(isGood, score) : appelé après chaque évaluation du tracé
+function setupWriteCanvas(char, opts = {}) {
+  const blind = opts.blind !== undefined ? opts.blind : state.write.blind;
   const stack = document.getElementById('canvasStack');
   const bg = document.getElementById('bgCanvas');
   const fg = document.getElementById('fgCanvas');
@@ -732,7 +735,7 @@ function setupWriteCanvas(char) {
   // Le fantôme utilise la couleur d'accent (pas --text) : en thème sombre, un texte
   // gris clair à faible opacité sur fond noir devient quasi invisible, alors que
   // l'accent (jaune en dark, bleu en light) reste lisible dans les deux thèmes.
-  if (!state.write.blind) {
+  if (!blind) {
     bgCtx.globalAlpha = 0.22;
     bgCtx.fillStyle = accent;
     bgCtx.font = `${size * 0.72}px ${fontStack}`;
@@ -823,6 +826,7 @@ function setupWriteCanvas(char) {
     stack.classList.toggle('bad', !isGood);
     status.className = `write-status ${isGood ? 'good' : 'bad'}`;
     status.textContent = `${isGood ? '✓' : '✗'} ${t(isGood ? UI.wellWritten : UI.needsWork)} (${Math.round(score * 100)}%)`;
+    if (opts.onResult) opts.onResult(isGood, score);
 
     // recolore le tracé en vert/rouge pour un retour visuel immédiat
     fgCtx.save();
@@ -1251,6 +1255,31 @@ const PUI = {
   newLabel: { fr: 'nouveaux', en: 'new' },
   howItWorks: { fr: 'Peu de nouveaux caractères, les plus fréquents d\'abord. Ceux que tu rates reviennent vite, ceux que tu sais reviennent de plus en plus tard (1, 3, 7, 16 jours…). 10 minutes par jour battent 1 heure le dimanche.', en: 'Few new characters, most frequent first. Misses come back soon, known ones come back later and later (1, 3, 7, 16 days…). 10 minutes a day beats 1 hour on Sunday.' },
   radicalsSupport: { fr: 'Les briques : un radical = un indice de sens. Utile pour comprendre, pas pour tout apprendre d\'un coup.', en: 'The building blocks: a radical is a meaning hint. Good for understanding, not for learning everything at once.' },
+  copyIt: { fr: 'RECOPIE-LE SUR LE MODÈLE', en: 'TRACE IT ON THE TEMPLATE' },
+  traceToCopy: { fr: 'trace par-dessus pour continuer', en: 'trace over it to continue' },
+  skipTrace: { fr: 'passer sans tracer', en: 'skip tracing' },
+  writeFromMemory: { fr: 'ÉCRIS-LE DE MÉMOIRE', en: 'WRITE IT FROM MEMORY' },
+  giveUp: { fr: 'je ne sais pas', en: 'I don\'t know' },
+  notYet: { fr: 'PAS ENCORE — REGARDE-LE BIEN', en: 'NOT YET — STUDY IT' },
+  next2: { fr: 'suite ▶', en: 'next ▶' },
+  statKnown: { fr: 'connus', en: 'known' },
+  statSolid: { fr: 'solides', en: 'solid' },
+  statWritten: { fr: 'écrits', en: 'written' },
+  statStreak: { fr: 'jours de suite', en: 'day streak' },
+  activity: { fr: 'ACTIVITÉ (14 JOURS)', en: 'ACTIVITY (14 DAYS)' },
+  tomorrow: { fr: 'à réviser d\'ici demain', en: 'due by tomorrow' },
+  hskProgress: { fr: 'NIVEAUX HSK (caractères connus)', en: 'HSK LEVELS (known characters)' },
+  backupTitle: { fr: 'Sauvegarde de ma progression', en: 'Back up my progress' },
+  backupExplain: { fr: 'Ta progression est gardée sur cet appareil seulement. Exporte-la pour la sauvegarder ou la passer du téléphone au PC (l\'import fusionne : rien n\'est perdu).', en: 'Your progress lives on this device only. Export it to back it up or move it between phone and PC (import merges: nothing is lost).' },
+  exportFile: { fr: 'exporter', en: 'export' },
+  exportCopy: { fr: 'copier', en: 'copy' },
+  importFile: { fr: 'importer un fichier', en: 'import a file' },
+  importPaste: { fr: 'ou colle ici le texte copié', en: 'or paste the copied text here' },
+  importBtn: { fr: 'importer le texte', en: 'import text' },
+  imported: { fr: 'caractères mis à jour', en: 'characters updated' },
+  importError: { fr: 'fichier non reconnu', en: 'unrecognized file' },
+  copied: { fr: 'copié — colle-le dans un message ou une note', en: 'copied — paste it into a note or message' },
+  copyFail: { fr: 'copie impossible : utilise « exporter »', en: 'copy failed: use "export"' },
   gotIt: { fr: 'compris ▶', en: 'got it ▶' },
   newBadge: { fr: 'NOUVEAU', en: 'NEW' },
   reverseHint: { fr: 'Quel est ce caractère ? Écris-le sur papier ou dans ta tête.', en: 'Which character is this? Write it on paper or in your head.' },
@@ -1277,28 +1306,38 @@ function saveParcours(p) {
   try { localStorage.setItem(PARCOURS_KEY, JSON.stringify(p)); } catch { /* stockage indisponible : la progression ne sera pas gardée */ }
 }
 let parcoursProgress = loadParcours();
-function markParcours(ch, status) {
+const ACTIVITY_KEY = 'woshicnd-activity'; // { [numéro de jour]: nombre de cartes }
+function loadActivity() {
+  try { return JSON.parse(localStorage.getItem(ACTIVITY_KEY)) || {}; } catch { return {}; }
+}
+let parcoursActivity = loadActivity();
+
+// written = le caractère vient d'être tracé correctement de mémoire. Sans cette
+// preuve, un caractère ne dépasse pas la boîte 2 : reconnaître ne suffit pas.
+function markParcours(ch, status, written) {
   const cur = parcoursProgress[ch] || { b: 0, d: 0 };
   if (status === 'know') {
-    cur.b = Math.min(cur.b + 1, SRS_DAYS.length - 1);
-    cur.d = todayNum() + SRS_DAYS[cur.b];
+    let nb = Math.min(cur.b + 1, SRS_DAYS.length - 1);
+    if (!written && nb > 2) nb = 2;
+    cur.b = nb;
+    cur.d = todayNum() + SRS_DAYS[nb];
+    if (written) cur.w = (cur.w || 0) + 1;
   } else {
     cur.b = 0;
     cur.d = todayNum();
   }
   parcoursProgress[ch] = cur;
   saveParcours(parcoursProgress);
+  const day = todayNum();
+  parcoursActivity[day] = (parcoursActivity[day] || 0) + 1;
+  try { localStorage.setItem(ACTIVITY_KEY, JSON.stringify(parcoursActivity)); } catch { /* idem */ }
 }
 const isKnown = (c) => !!parcoursProgress[c] && parcoursProgress[c].b >= 1;
 const isRetry = (c) => !!parcoursProgress[c] && parcoursProgress[c].b === 0;
 const dueChars = () => Object.keys(parcoursProgress).filter(c => parcoursProgress[c].d <= todayNum())
   .sort((a, b) => parcoursProgress[a].d - parcoursProgress[b].d);
-// Nouveaux caractères : les plus fréquents d'abord (c'est ce qui sert le plus vite)
-// Les caractères de ton propre vocabulaire passent avant le reste
-const newChars = (n) => {
-  const mine = [...new Set([...VOCAB.map(v => v.hanzi).join(''), ...Object.keys(RADICALS)])].filter(c => Dict.char(c));
-  return [...mine, ...Dict.topChars(1500)].filter((c, i, arr) => !parcoursProgress[c] && arr.indexOf(c) === i).slice(0, n);
-};
+// Du plus fréquent au moins fréquent (liste de Jun Da) : ce qui sert le plus vite d'abord
+const newChars = (n) => Dict.topChars(3000).filter(c => !parcoursProgress[c]).slice(0, n);
 
 // Radicaux regroupés par forme complète (氵 sous 水), du plus fécond au moins fécond
 let lessonRadicalsCache = null;
@@ -1346,7 +1385,7 @@ function startSession() {
 
 function startDeck(deck, title, rad, page) {
   if (rad) Object.assign(state.parcours, { newSet: new Set(), requeued: new Set() });
-  Object.assign(state.parcours, { view: 'lesson', deck, title, rad, page: page || 0, i: rad ? -1 : 0 });
+  Object.assign(state.parcours, { view: 'lesson', deck, title, rad, page: page || 0, i: rad ? -1 : 0, cardType: null });
   state.parcours.revealed = !rad && state.parcours.newSet.has(deck[0]); // un caractère nouveau s'apprend face visible
   renderContent();
   scrollContentTop();
@@ -1406,11 +1445,128 @@ function soundFamilyHtml(ch) {
   return `<button class="flash-btn par-sound" data-sound="${esc(ph)}">${esc(t(PUI.soundFamily))} ${esc(ph)} · ${Dict.soundFamily(ph).length}</button>`;
 }
 
+// ----- Progression visible -----
+function streakDays() {
+  let d = todayNum();
+  if (!parcoursActivity[d]) d--; // aujourd'hui pas encore commencé : la série d'hier compte encore
+  let n = 0;
+  while (parcoursActivity[d]) { n++; d--; }
+  return n;
+}
+
+function renderProgressPanel() {
+  const keys = Object.keys(parcoursProgress);
+  const known = keys.filter(isKnown).length;
+  const solid = keys.filter(c => parcoursProgress[c].b >= 3).length;
+  const written = keys.filter(c => parcoursProgress[c].w).length;
+  const tomorrow = keys.filter(c => parcoursProgress[c].d <= todayNum() + 1).length;
+  const streak = streakDays();
+
+  const hskRows = [1, 2, 3, 4, 5, 6].map(lvl => {
+    const all = Dict.charsOfHsk(lvl);
+    const k = all.filter(isKnown).length;
+    const pct = all.length ? Math.round((k / all.length) * 100) : 0;
+    return `<div class="par-hsk"><span class="par-hsk-label">HSK ${lvl}</span><span class="par-hsk-bar"><span style="width:${pct}%"></span></span><span class="par-hsk-count">${k} / ${all.length}</span></div>`;
+  }).join('');
+
+  const today = todayNum();
+  const days = Array.from({ length: 14 }, (_, i) => today - 13 + i);
+  const max = Math.max(1, ...days.map(d => parcoursActivity[d] || 0));
+  const bars = days.map(d => `<span class="par-day${d === today ? ' today' : ''}" title="${parcoursActivity[d] || 0}"><span style="height:${Math.round(((parcoursActivity[d] || 0) / max) * 100)}%"></span></span>`).join('');
+
+  return `
+    <div class="par-dash">
+      <div class="par-stats">
+        <div class="par-stat"><b>${known}</b><span>${esc(t(PUI.statKnown))}</span></div>
+        <div class="par-stat"><b>${solid}</b><span>${esc(t(PUI.statSolid))}</span></div>
+        <div class="par-stat"><b>${written}</b><span>${esc(t(PUI.statWritten))}</span></div>
+        <div class="par-stat"><b>${streak}</b><span>${esc(t(PUI.statStreak))}</span></div>
+      </div>
+      <div class="par-dash-title">${esc(t(PUI.activity))} · ${esc(t(PUI.tomorrow))} : ${tomorrow}</div>
+      <div class="par-days">${bars}</div>
+      <div class="par-dash-title">${esc(t(PUI.hskProgress))}</div>
+      ${hskRows}
+    </div>`;
+}
+
+// ----- Sauvegarde : tout reste sur l'appareil, donc export / import -----
+function exportParcours() {
+  return JSON.stringify({ app: 'woshicnd', v: 1, progress: parcoursProgress, activity: parcoursActivity });
+}
+
+// Fusion : pour chaque caractère on garde l'état le plus avancé (rien n'est écrasé à la baisse)
+function importParcours(text) {
+  const data = JSON.parse(text);
+  if (!data || data.app !== 'woshicnd' || typeof data.progress !== 'object') throw new Error('format');
+  let n = 0;
+  for (const [c, v] of Object.entries(data.progress)) {
+    if (!v || typeof v.b !== 'number' || typeof v.d !== 'number') continue;
+    const cur = parcoursProgress[c];
+    if (!cur || v.b > cur.b || (v.b === cur.b && v.d > cur.d)) { parcoursProgress[c] = { b: v.b, d: v.d, ...(v.w ? { w: v.w } : {}) }; n++; }
+  }
+  for (const [d, k] of Object.entries(data.activity || {})) {
+    if (typeof k === 'number') parcoursActivity[d] = Math.max(parcoursActivity[d] || 0, k);
+  }
+  saveParcours(parcoursProgress);
+  try { localStorage.setItem(ACTIVITY_KEY, JSON.stringify(parcoursActivity)); } catch { /* idem */ }
+  return n;
+}
+
+function backupHtml() {
+  return `
+    <details class="par-backup">
+      <summary>${esc(t(PUI.backupTitle))}</summary>
+      <p>${esc(t(PUI.backupExplain))}</p>
+      <div class="par-actions">
+        <button class="flash-btn" id="parExport">⬇ ${esc(t(PUI.exportFile))}</button>
+        <button class="flash-btn" id="parCopy">⧉ ${esc(t(PUI.exportCopy))}</button>
+        <label class="flash-btn par-file">⬆ ${esc(t(PUI.importFile))}<input type="file" id="parImportFile" accept=".json,application/json" hidden></label>
+      </div>
+      <textarea id="parImportText" rows="3" placeholder="${esc(t(PUI.importPaste))}"></textarea>
+      <button class="flash-btn" id="parImportBtn">${esc(t(PUI.importBtn))}</button>
+      <div class="dict-note" id="parBackupMsg"></div>
+    </details>`;
+}
+
+function wireBackup(content) {
+  const msg = (text) => { const m = document.getElementById('parBackupMsg'); if (m) m.textContent = text; };
+  const doImport = (text) => {
+    try { const n = importParcours(text); msg(`${n} ${t(PUI.imported)}`); setTimeout(renderContent, 900); }
+    catch { msg(t(PUI.importError)); }
+  };
+  document.getElementById('parExport').addEventListener('click', () => {
+    const blob = new Blob([exportParcours()], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `woshicnd-progression-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+  document.getElementById('parCopy').addEventListener('click', () => {
+    (navigator.clipboard ? navigator.clipboard.writeText(exportParcours()) : Promise.reject())
+      .then(() => msg(t(PUI.copied))).catch(() => msg(t(PUI.copyFail)));
+  });
+  document.getElementById('parImportFile').addEventListener('change', (e) => {
+    const f = e.target.files[0];
+    if (f) f.text().then(doImport).catch(() => msg(t(PUI.importError)));
+  });
+  document.getElementById('parImportBtn').addEventListener('click', () => doImport(document.getElementById('parImportText').value));
+}
+
+// Raccourcis clavier (PC) : espace/entrée = révéler ou valider, ← à revoir, → je sais
+document.addEventListener('keydown', (e) => {
+  if (state.category !== 'parcours' || state.parcours.view !== 'lesson') return;
+  if (/^(INPUT|TEXTAREA)$/.test((e.target.tagName || ''))) return;
+  const click = (id) => { const el = document.getElementById(id); if (el && !el.disabled) { el.click(); e.preventDefault(); return true; } return false; };
+  if (e.key === ' ' || e.key === 'Enter') {
+    const card = document.getElementById('parCard');
+    if (card && !card.classList.contains('par-card-back')) { card.click(); e.preventDefault(); } else click('parKnow');
+  } else if (e.key === 'ArrowRight') click('parKnow');
+  else if (e.key === 'ArrowLeft') click('parRetry');
+});
+
 function renderParcoursList(content) {
   const radicals = lessonRadicals();
-  const totalChars = radicals.reduce((s, g) => s + lessonChars(g.r).length, 0);
-  const known = Object.keys(parcoursProgress).filter(isKnown).length;
-  const retry = retryChars().length;
   const dueNow = dueChars().length;
 
   const tiles = radicals.map(g => {
@@ -1430,10 +1586,6 @@ function renderParcoursList(content) {
 
   content.innerHTML = `
     ${pageHeader(t(PUI.title), t(PUI.sub))}
-    <div class="par-summary">
-      <div class="par-summary-stat"><b>${known}</b> ${esc(t(PUI.progress))} / ${totalChars}</div>
-      <div class="par-summary-stat"><b>${retry}</b> ${esc(t(PUI.toReview))}</div>
-    </div>
     <div class="par-session">
       <button class="par-session-btn" id="parSession">
         <span class="par-session-title">${esc(t(PUI.session))}</span>
@@ -1441,14 +1593,17 @@ function renderParcoursList(content) {
       </button>
       <div class="par-session-how">${esc(t(PUI.howItWorks))}</div>
     </div>
+    ${renderProgressPanel()}
     <div class="dict-note">${esc(t(PUI.radicalsSupport))}</div>
     <div class="par-grid">${tiles}</div>
+    ${backupHtml()}
   `;
 
   content.querySelectorAll('.par-tile').forEach(el => el.addEventListener('click', () => {
     startLesson(el.dataset.rad, 0);
   }));
   document.getElementById('parSession').addEventListener('click', startSession);
+  wireBackup(content);
 }
 
 function startLesson(rad, page) {
@@ -1532,66 +1687,161 @@ function renderParcoursLesson(content) {
       <div class="par-toolbar"><button class="flash-btn" id="parBack">${esc(t(PUI.back))}</button></div>`;
 
   const isNew = p.newSet.has(ch);
-  // une carte sur deux en sens inverse : on lit le sens, il faut retrouver le caractère
-  const reverse = !isNew && !rad && p.i % 2 === 1;
+  const prog = parcoursProgress[ch];
+  // Trois sortes de cartes :
+  //  - nouveau : on voit tout, puis on recopie le caractère sur le modèle
+  //  - écrire  : on lit le sens, on écrit de mémoire (corrigé automatiquement = preuve réelle)
+  //  - reconnaître : on voit le caractère, on se note soi-même
+  // Figé pour toute la durée de la carte : noter la carte change la boîte, donc le calcul donnerait un autre type.
+  if (!p.cardType || p.cardType.i !== p.i || p.cardType.ch !== ch) {
+    p.cardType = { i: p.i, ch, type: isNew ? 'new' : (!rad && prog && prog.b >= 1 && p.i % 2 === 1 ? 'write' : 'recognize') };
+  }
+  const type = p.cardType.type;
 
-  if (!p.revealed) {
-    const front = reverse
-      ? `<div class="par-def par-def-big">${esc(rec.d || '')}</div><div class="flash-pinyin">${esc(rec.p || '')}</div><div class="flash-hint">${esc(t(PUI.reverseHint))}</div>`
-      : `<div class="flash-hanzi">${esc(ch)}</div><div class="flash-hint">${esc(t(PUI.recall))}</div>`;
-    content.innerHTML = `${header}
-      <div class="flash-wrap">
-        <div class="flash-card" id="parCard">
-          <span class="flash-progress">${p.i + 1} / ${p.deck.length}</span>
-          ${front}
-          <div class="flash-hint">${esc(t(PUI.reveal))}</div>
-        </div>
-      </div>`;
-    document.getElementById('parCard').addEventListener('click', () => { p.revealed = true; renderContent(); scrollContentTop(); });
-  } else {
+  const advance = (status, written) => {
+    if (status) markParcours(ch, status, written);
+    // nouveau ou raté : il revient une fois à la fin de la session, pour vérifier qu'il a tenu
+    if ((isNew || status === 'retry') && !p.requeued.has(ch)) { p.requeued.add(ch); p.deck.push(ch); }
+    p.newSet.delete(ch);
+    p.i++;
+    p.revealed = p.i < p.deck.length && p.newSet.has(p.deck[p.i]);
+    p.passed = false;
+    renderContent();
+    scrollContentTop();
+  };
+  const wireCommon = () => {
+    document.getElementById('parBack').addEventListener('click', () => goParcours('list'));
+    content.querySelectorAll('[data-speak]').forEach(b => b.addEventListener('click', () => speak(b.dataset.speak)));
+    content.querySelectorAll('[data-explore]').forEach(b => b.addEventListener('click', () => openInExplorer(b.dataset.explore)));
+    content.querySelectorAll('.dict-chip').forEach(b => b.addEventListener('click', () => openInExplorer(b.dataset.key)));
+    content.querySelectorAll('.dict-row').forEach(b => b.addEventListener('click', () => openInExplorer(b.dataset.key)));
+    content.querySelectorAll('[data-sound]').forEach(b => b.addEventListener('click', () => goParcours('sound', { ph: b.dataset.sound })));
+    const clr = document.getElementById('btnClear');
+    if (clr) clr.addEventListener('click', () => {
+      const fg = document.getElementById('fgCanvas');
+      fg.getContext('2d').clearRect(0, 0, fg.width, fg.height);
+      resetWriteFeedback();
+    });
+  };
+  const infoHtml = () => {
     const words = Dict.wordsWith(ch, 4);
-    content.innerHTML = `${header}
-      <div class="flash-wrap">
-        <div class="flash-card par-card-back" id="parCard">
-          <span class="flash-progress">${p.i + 1} / ${p.deck.length}</span>
-          ${isNew ? `<span class="par-new-badge">${esc(t(PUI.newBadge))}</span>` : ''}
+    const rank = Dict.rank(ch), hsk = Dict.hsk(ch);
+    return `
           ${em ? `<div class="flash-emoji">${em}</div>` : ''}
           <div class="flash-hanzi">${esc(ch)}</div>
           <div class="flash-pinyin">${esc(rec.p || '')}</div>
           <div class="par-def">${esc(rec.d || '')}<span class="dict-en">EN</span></div>
+          ${rank ? `<div class="flash-hint">#${rank}${hsk ? ` · HSK ${hsk}` : ''}</div>` : ''}
           ${roleHtml(ch, cardRad)}
           ${words.length ? `<div class="par-words"><div class="par-words-title">${esc(t(PUI.words))}</div>${words.map(rowHtml).join('')}</div>` : ''}
           ${soundFamilyHtml(ch)}
           <div class="par-links">
             <button class="btn-audio" data-speak="${esc(ch)}">🔊</button>
             <button class="flash-btn" data-explore="${esc(ch)}">${esc(t(PUI.openExplorer))}</button>
-          </div>
+          </div>`;
+  };
+  const canvasHtml = (hintKey) => `
+        <div class="canvas-stack par-canvas" id="canvasStack"><canvas id="bgCanvas"></canvas><canvas id="fgCanvas"></canvas></div>
+        <div class="write-status" id="writeStatus">${esc(t(hintKey))}</div>`;
+
+  if (type === 'new') {
+    content.innerHTML = `${header}
+      <div class="flash-wrap">
+        <div class="flash-card par-card-back" id="parCard">
+          <span class="flash-progress">${p.i + 1} / ${p.deck.length}</span>
+          <span class="par-new-badge">${esc(t(PUI.newBadge))}</span>
+          ${infoHtml()}
         </div>
+        <div class="par-step-title">${esc(t(PUI.copyIt))}</div>
+        ${canvasHtml(PUI.traceToCopy)}
         <div class="flash-controls">
-          ${isNew ? '' : `<button class="flash-btn retry" id="parRetry">${esc(t(PUI.retry))}</button>`}
-          <button class="flash-btn know" id="parKnow">${esc(isNew ? t(PUI.gotIt) : t(PUI.know))}</button>
+          <button class="flash-btn" id="btnClear">🗑 ${esc(t(UI.clear))}</button>
+          <button class="flash-btn know" id="parKnow" disabled>${esc(t(PUI.gotIt))}</button>
+        </div>
+        <button class="par-skip" id="parSkip">${esc(t(PUI.skipTrace))}</button>
+      </div>`;
+    wireCommon();
+    const knowBtn = document.getElementById('parKnow');
+    knowBtn.addEventListener('click', () => advance('know', false));
+    document.getElementById('parSkip').addEventListener('click', () => advance('know', false));
+    setupWriteCanvas(ch, { blind: false, onResult: (good) => { knowBtn.disabled = !good; } });
+    return;
+  }
+
+  if (type === 'write') {
+    if (!p.revealed) {
+      content.innerHTML = `${header}
+        <div class="flash-wrap">
+          <div class="flash-card par-write-front">
+            <span class="flash-progress">${p.i + 1} / ${p.deck.length}</span>
+            <div class="par-def par-def-big">${esc(rec.d || '')}</div>
+            <div class="flash-pinyin">${esc(rec.p || '')}</div>
+          </div>
+          ${canvasHtml(PUI.writeFromMemory)}
+          <div class="flash-controls">
+            <button class="flash-btn" id="btnClear">🗑 ${esc(t(UI.clear))}</button>
+            <button class="flash-btn retry" id="parGiveUp">${esc(t(PUI.giveUp))}</button>
+          </div>
+        </div>`;
+      wireCommon();
+      let done = false;
+      document.getElementById('parGiveUp').addEventListener('click', () => {
+        markParcours(ch, 'retry');
+        if (!p.requeued.has(ch)) { p.requeued.add(ch); p.deck.push(ch); }
+        p.failedWrite = true; p.revealed = true; renderContent(); scrollContentTop();
+      });
+      setupWriteCanvas(ch, { blind: true, onResult: (good) => {
+        if (!good || done) return;
+        done = true;
+        markParcours(ch, 'know', true);
+        p.failedWrite = false;
+        setTimeout(() => { if (state.category === 'parcours' && p.deck[p.i] === ch) { p.revealed = true; renderContent(); scrollContentTop(); } }, 900);
+      } });
+    } else {
+      content.innerHTML = `${header}
+        <div class="flash-wrap">
+          <div class="flash-card par-card-back">
+            <span class="flash-progress">${p.i + 1} / ${p.deck.length}</span>
+            <div class="par-result ${p.failedWrite ? 'bad' : 'good'}">${esc(p.failedWrite ? t(PUI.notYet) : t(UI.wellWritten))}</div>
+            ${infoHtml()}
+          </div>
+          <div class="flash-controls"><button class="flash-btn know" id="parKnow">${esc(t(PUI.next2))}</button></div>
+        </div>`;
+      wireCommon();
+      document.getElementById('parKnow').addEventListener('click', () => advance(null));
+    }
+    return;
+  }
+
+  // reconnaître
+  if (!p.revealed) {
+    content.innerHTML = `${header}
+      <div class="flash-wrap">
+        <div class="flash-card" id="parCard">
+          <span class="flash-progress">${p.i + 1} / ${p.deck.length}</span>
+          <div class="flash-hanzi">${esc(ch)}</div>
+          <div class="flash-hint">${esc(t(PUI.recall))}</div>
+          <div class="flash-hint">${esc(t(PUI.reveal))}</div>
         </div>
       </div>`;
-    const advance = (status) => {
-      markParcours(ch, status);
-      // nouveau ou raté : il revient une fois à la fin de la session, pour vérifier qu'il a tenu
-      if ((isNew || status === 'retry') && !p.requeued.has(ch)) { p.requeued.add(ch); p.deck.push(ch); }
-      p.newSet.delete(ch);
-      p.i++;
-      p.revealed = p.i < p.deck.length && p.newSet.has(p.deck[p.i]);
-      renderContent();
-      scrollContentTop();
-    };
-    document.getElementById('parKnow').addEventListener('click', () => advance('know'));
-    const rt = document.getElementById('parRetry');
-    if (rt) rt.addEventListener('click', () => advance('retry'));
-    content.querySelectorAll('[data-speak]').forEach(b => b.addEventListener('click', () => speak(b.dataset.speak)));
-    content.querySelectorAll('[data-explore]').forEach(b => b.addEventListener('click', () => openInExplorer(b.dataset.explore)));
-    content.querySelectorAll('.dict-chip').forEach(b => b.addEventListener('click', () => openInExplorer(b.dataset.key)));
-    content.querySelectorAll('.dict-row').forEach(b => b.addEventListener('click', () => openInExplorer(b.dataset.key)));
-    content.querySelectorAll('[data-sound]').forEach(b => b.addEventListener('click', () => goParcours('sound', { ph: b.dataset.sound })));
+    wireCommon();
+    document.getElementById('parCard').addEventListener('click', () => { p.revealed = true; renderContent(); scrollContentTop(); });
+  } else {
+    content.innerHTML = `${header}
+      <div class="flash-wrap">
+        <div class="flash-card par-card-back" id="parCard">
+          <span class="flash-progress">${p.i + 1} / ${p.deck.length}</span>
+          ${infoHtml()}
+        </div>
+        <div class="flash-controls">
+          <button class="flash-btn retry" id="parRetry">${esc(t(PUI.retry))}</button>
+          <button class="flash-btn know" id="parKnow">${esc(t(PUI.know))}</button>
+        </div>
+      </div>`;
+    wireCommon();
+    document.getElementById('parKnow').addEventListener('click', () => advance('know', false));
+    document.getElementById('parRetry').addEventListener('click', () => advance('retry'));
   }
-  document.getElementById('parBack').addEventListener('click', () => goParcours('list'));
 }
 
 function renderParcoursSound(content) {

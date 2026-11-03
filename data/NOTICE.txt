@@ -9,3 +9,7 @@ hanzi.json, radicals.json — dérivés de Make Me a Hanzi (https://github.com/s
              Derived from Make Me a Hanzi dictionary.txt. Filtered and reformatted by tools/build_data.py.
 
 Régénération : python3 -I tools/build_data.py <cedict_ts.u8> <mmh_dictionary.txt> data
+
+hanzi.json (champs f = rang de fréquence, l = niveau HSK) — dérivés de hanziDB.csv
+             (https://github.com/ruddfawcett/hanziDB.csv, licence MIT), lui-même basé sur la
+             Modern Chinese Character Frequency List de Jun Da.
